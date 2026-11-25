@@ -1,0 +1,3342 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>星艦企鵝三渲二班級管理平台</title>
+  <style>
+    :root {
+      /* Deep Space Voxel Fleet + Dramatic Amber/Cyan Lighting Palette */
+      --space-top: #07111e;
+      --space-mid: #0e2038;
+      --space-bot: #152d4b;
+
+      --hull-white: #eef4fa;
+      --hull-slate: #8fa6c2;
+      --hull-dark: #1d314a;
+      --hull-deep: #101e31;
+      --ink-outline: #070e18;
+
+      --gold-trim: #e8cf82;
+      --gold-dark: #9c7e34;
+      --cyan-glow: #64f0ff;
+      --cyan-mid: #28b9d6;
+      --cyan-dark: #146a84;
+      --amber-glow: #ffae42;
+      --amber-warm: #ff7e36;
+      --amber-dark: #9e4110;
+      --alert-red: #ff5652;
+      --alert-red-dark: #9c1f1c;
+
+      --text-main: #f3f8ff;
+      --text-soft: #adc4de;
+      --text-dark: #0e1d30;
+
+      --radius-card: 20px;
+      --font-main: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", "Hiragino Sans", system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+      font-family: var(--font-main);
+      color: var(--text-main);
+      background: radial-gradient(ellipse at 72% 18%, #1c3a5e 0%, #0e2036 48%, #07101c 100%);
+      overflow-x: hidden;
+    }
+
+    @media (min-width: 1024px) and (min-height: 680px) {
+      html, body {
+        height: 100vh;
+        overflow: hidden;
+      }
+    }
+
+    /* ==================== VOXEL SPACE FLEET + CINEMATIC LIGHTING BACKDROP ==================== */
+    .scenery-bg {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    /* Dramatic warm amber & cool cyan atmospheric lighting cones (Ref 2 mood) */
+    .cinematic-lights {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 46% 36% at 50% 42%, rgba(255, 174, 66, 0.16) 0%, transparent 72%),
+        radial-gradient(ellipse 42% 32% at 16% 24%, rgba(100, 240, 255, 0.15) 0%, transparent 70%),
+        radial-gradient(ellipse 48% 36% at 86% 28%, rgba(100, 240, 255, 0.14) 0%, transparent 70%),
+        linear-gradient(122deg, transparent 20%, rgba(114, 236, 255, 0.08) 32%, transparent 44%),
+        linear-gradient(122deg, transparent 58%, rgba(255, 188, 92, 0.10) 67%, transparent 78%);
+      animation: light-breathe 9s ease-in-out infinite alternate;
+    }
+
+    @keyframes light-breathe {
+      0% { opacity: 0.82; }
+      100% { opacity: 1; }
+    }
+
+    /* Glossy Reflective Voxel Hangar Deck at bottom (Ref 2 wet specular floor) */
+    .reflective-deck {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 26vh;
+      min-height: 165px;
+      background:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0px, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 64px),
+        linear-gradient(180deg, rgba(16, 33, 54, 0.4) 0%, rgba(10, 21, 36, 0.92) 42%, #081220 100%);
+      border-top: 2px solid rgba(100, 240, 255, 0.28);
+    }
+    .reflective-deck::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 26% 65% at 24% 35%, rgba(100, 240, 255, 0.16) 0%, transparent 70%),
+        radial-gradient(ellipse 28% 72% at 50% 42%, rgba(255, 168, 66, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 26% 65% at 78% 38%, rgba(100, 240, 255, 0.16) 0%, transparent 70%);
+      filter: blur(8px);
+    }
+
+    .bg-fleet-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.85;
+    }
+
+    @keyframes fleet-drift {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(16px, -6px); }
+    }
+    .fleet-group-a { animation: fleet-drift 16s ease-in-out infinite; }
+    .fleet-group-b { animation: fleet-drift 20s ease-in-out infinite reverse; }
+
+    /* Particle Canvases */
+    #ambient-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 95;
+    }
+
+    /* ==================== MAIN SHELL ==================== */
+    .app-shell {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 1880px;
+      height: 100%;
+      margin: 0 auto;
+      padding: clamp(10px, 1.4vh, 18px) clamp(14px, 2vw, 34px) clamp(12px, 1.6vh, 22px);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(10px, 1.4vh, 18px);
+    }
+
+    /* Cel-Shaded Sci-Fi Armor Glass Panel */
+    .cel-card {
+      background:
+        linear-gradient(160deg, rgba(28, 48, 76, 0.86) 0%, rgba(16, 30, 50, 0.90) 60%, rgba(11, 22, 38, 0.94) 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: var(--radius-card);
+      border: 2.5px solid #070e18;
+      box-shadow:
+        0 8px 0 #07101c,
+        0 18px 34px rgba(0, 0, 0, 0.52),
+        inset 0 2px 0 rgba(160, 226, 255, 0.32),
+        inset 0 -3px 0 rgba(0, 0, 0, 0.45);
+    }
+
+    /* ==================== HIGH-EXTRUSION 三渲二 (CEL-SHADED 3D) BUTTONS ==================== */
+    .btn-3d {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-family: inherit;
+      font-weight: 900;
+      border: 2.5px solid var(--ink-outline);
+      cursor: pointer;
+      transition: transform 0.11s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.11s ease,
+                  filter 0.14s ease,
+                  background 0.2s ease;
+      outline: none;
+      overflow: hidden;
+    }
+    /* Crisp anime top-edge cel specular sheen */
+    .btn-3d::before {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 6px;
+      right: 6px;
+      height: 34%;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0) 100%);
+      pointer-events: none;
+    }
+    .btn-3d:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.08);
+    }
+    .btn-3d:active {
+      transform: translateY(5px);
+    }
+    .btn-3d:focus-visible {
+      outline: 3px solid var(--cyan-glow);
+      outline-offset: 2px;
+    }
+
+    /* ==================== TOP BAR ==================== */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .mode-tray {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 14px 12px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(28, 50, 78, 0.92) 0%, rgba(14, 27, 45, 0.95) 100%);
+      border: 2.5px solid var(--ink-outline);
+      box-shadow: 0 7px 0 #07101c, 0 14px 26px rgba(0, 0, 0, 0.45), inset 0 2px 0 rgba(232, 207, 130, 0.35);
+    }
+
+    .mode-btn {
+      padding: 8px 26px;
+      border-radius: 14px;
+      font-size: clamp(16px, 1.3vw, 21px);
+      letter-spacing: 0.08em;
+      color: var(--text-dark);
+    }
+
+    .mode-btn[data-mode="lunch"] {
+      background: linear-gradient(180deg, #f6e4aa 0%, #e0c16c 58%, #c9a549 100%);
+      box-shadow: 0 7px 0 #7a5f1d, 0 11px 16px rgba(0, 0, 0, 0.42), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+    }
+    .mode-btn[data-mode="reading"] {
+      background: linear-gradient(180deg, #d7f0ff 0%, #98c7e4 58%, #76aacb 100%);
+      box-shadow: 0 7px 0 #37617d, 0 11px 16px rgba(0, 0, 0, 0.42), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+    }
+    .mode-btn[data-mode="class"] {
+      background: linear-gradient(180deg, #e5edf5 0%, #b5c7dc 58%, #95acc7 100%);
+      box-shadow: 0 7px 0 #485e7a, 0 11px 16px rgba(0, 0, 0, 0.42), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+    }
+
+    .mode-btn.active {
+      background: linear-gradient(180deg, #ffd175 0%, #ff993b 55%, #e5721c 100%) !important;
+      color: #fffef9;
+      text-shadow: 0 2px 0 rgba(120, 38, 6, 0.75);
+      box-shadow:
+        0 7px 0 #8a3408,
+        0 0 24px rgba(255, 166, 62, 0.65),
+        0 12px 20px rgba(0, 0, 0, 0.45) !important;
+    }
+    .mode-btn:active {
+      box-shadow: 0 2px 0 #070e18, 0 4px 8px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 4px;
+    }
+
+    .clock-pill {
+      padding: 8px 22px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #f3f8ff 0%, #d2e2f2 60%, #b4cadf 100%);
+      box-shadow: 0 7px 0 #4a637d, 0 12px 22px rgba(0, 0, 0, 0.45), 0 0 14px rgba(100, 240, 255, 0.25);
+      color: var(--text-dark);
+      font-size: clamp(22px, 1.95vw, 31px);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+      min-width: 150px;
+    }
+    .clock-pill:active {
+      box-shadow: 0 2px 0 #4a637d;
+    }
+    .clock-pill.timer-running {
+      background: linear-gradient(180deg, #ffe79e 0%, #ffba49 58%, #e89624 100%);
+      color: #4a1e04;
+      box-shadow: 0 7px 0 #8c4d0a, 0 0 24px rgba(255, 186, 73, 0.65);
+    }
+    .clock-pill.timer-finished {
+      animation: timer-alarm-flash 0.5s ease-in-out infinite alternate;
+    }
+    @keyframes timer-alarm-flash {
+      0% { background: #ff9c94; color: #5c0c08; transform: scale(1); box-shadow: 0 7px 0 #8a1d17, 0 0 14px rgba(255,86,82,0.5); }
+      100% { background: #ff5652; color: #ffffff; transform: scale(1.04); box-shadow: 0 7px 0 #78120e, 0 0 28px rgba(255,86,82,0.9); }
+    }
+
+    .settings-pill {
+      padding: 10px 22px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #d8f4ff 0%, #8cd5ea 58%, #63b5d1 100%);
+      box-shadow: 0 7px 0 #26657d, 0 12px 22px rgba(0, 0, 0, 0.45);
+      color: var(--text-dark);
+      font-size: clamp(16px, 1.25vw, 20px);
+    }
+    .settings-pill:active {
+      box-shadow: 0 2px 0 #26657d;
+    }
+
+    /* ==================== MIDDLE ROW (3 CORE CARDS) ==================== */
+    .middle-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.14fr 1fr;
+      gap: clamp(12px, 1.5vw, 22px);
+      flex: 1.08;
+      min-height: 0;
+    }
+
+    .panel-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(12px, 1.4vh, 18px) clamp(14px, 1.5vw, 22px);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Gold & Cyan Voxel Tech Top Accent Strip */
+    .panel-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 24px;
+      right: 24px;
+      height: 4px;
+      border-radius: 0 0 6px 6px;
+      background: linear-gradient(90deg, var(--gold-trim) 0%, var(--cyan-glow) 50%, var(--gold-trim) 100%);
+      box-shadow: 0 0 12px rgba(100, 240, 255, 0.55);
+      pointer-events: none;
+    }
+
+    .card-header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: clamp(8px, 1.1vh, 13px);
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: clamp(19px, 1.6vw, 26px);
+      font-weight: 900;
+      color: #f4f9ff;
+      letter-spacing: 0.12em;
+      text-shadow: 0 3px 0 #07111e, 0 0 14px rgba(100, 240, 255, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .card-title::before,
+    .card-title::after {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      transform: rotate(45deg);
+      background: var(--gold-trim);
+      border: 1.8px solid var(--ink-outline);
+      box-shadow: 0 0 8px rgba(232, 207, 130, 0.7);
+    }
+
+    /* --- (A) Tasks Panel (NO strikethrough when checked!) --- */
+    .task-list {
+      list-style: none;
+      margin: 0;
+      padding: 2px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: clamp(5px, 0.7vh, 10px);
+      overflow-y: auto;
+      flex: 1;
+      z-index: 2;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: clamp(4px, 0.58vh, 8px) 10px;
+      border-radius: 14px;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.06);
+      border: 2px solid rgba(143, 182, 218, 0.22);
+      box-shadow: 0 4px 0 rgba(5, 11, 20, 0.45);
+      transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .task-item:hover {
+      transform: translateX(4px);
+      background: rgba(100, 240, 255, 0.10);
+      border-color: rgba(100, 240, 255, 0.45);
+    }
+    .task-item.checked {
+      background: rgba(255, 174, 66, 0.12);
+      border-color: rgba(255, 198, 102, 0.55);
+      box-shadow: 0 4px 0 rgba(5, 11, 20, 0.55), 0 0 14px rgba(255, 174, 66, 0.2);
+    }
+
+    .task-checkbox {
+      width: clamp(28px, 2.1vw, 34px);
+      height: clamp(28px, 2.1vw, 34px);
+      flex-shrink: 0;
+      border-radius: 9px;
+      border: 2.5px solid var(--ink-outline);
+      background: linear-gradient(180deg, #dce8f5 0%, #a4bdd6 100%);
+      box-shadow: 0 5px 0 #3f5873, inset 0 2px 0 rgba(255, 255, 255, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .task-item.checked .task-checkbox {
+      background: linear-gradient(180deg, #ffd070 0%, #ff9330 60%, #e06d16 100%);
+      box-shadow: 0 5px 0 #8a3508, 0 0 14px rgba(255, 166, 62, 0.65), inset 0 2px 0 rgba(255, 255, 255, 0.7);
+      transform: scale(1.05);
+    }
+
+    .task-check-svg {
+      width: 18px;
+      height: 18px;
+      stroke: #ffffff;
+      stroke-width: 3.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      opacity: 0;
+      transform: scale(0.4);
+      transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .task-item.checked .task-check-svg {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .task-label {
+      font-size: clamp(15px, 1.28vw, 20px);
+      font-weight: 800;
+      color: var(--text-soft);
+      padding: 3px 11px;
+      border-radius: 10px;
+      line-height: 1.35;
+      transition: all 0.2s ease;
+      flex: 1;
+    }
+
+    /* Checked task: bright cel-shaded energy pill, NO strikethrough! */
+    .task-item.checked .task-label {
+      color: var(--text-dark);
+      text-decoration: none;
+      border: 2px solid var(--ink-outline);
+      box-shadow: 0 4px 0 rgba(7, 14, 24, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.72);
+    }
+    .task-item.checked.tint-0 .task-label { background: linear-gradient(180deg, #ffe2b3 0%, #f6bc6e 100%); }
+    .task-item.checked.tint-1 .task-label { background: linear-gradient(180deg, #ccf9ff 0%, #7ee3f2 100%); }
+    .task-item.checked.tint-2 .task-label { background: linear-gradient(180deg, #fff1b8 0%, #f2d268 100%); }
+    .task-item.checked.tint-3 .task-label { background: linear-gradient(180deg, #cef7cf 0%, #86e095 100%); }
+
+    /* --- (B) Quiet Challenge Panel (Orbital Fleet Shield Deck, NO houses!) --- */
+    .quiet-card {
+      position: relative;
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: clamp(12px, 1.4vh, 18px) clamp(14px, 1.5vw, 20px);
+      background: linear-gradient(180deg, #0b182a 0%, #142a46 52%, #0e1e33 100%);
+      border: 2.5px solid #070e18;
+      box-shadow:
+        0 8px 0 #07101c,
+        0 18px 36px rgba(0, 0, 0, 0.56),
+        inset 0 2px 0 rgba(100, 240, 255, 0.45);
+      transition: box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+
+    .quiet-card.noisy {
+      border-color: var(--alert-red);
+      box-shadow:
+        0 0 0 4px rgba(255, 86, 82, 0.42),
+        0 8px 0 #7a1715,
+        0 18px 36px rgba(220, 45, 40, 0.46),
+        inset 0 0 50px rgba(255, 86, 82, 0.48);
+    }
+
+    .quiet-scenery-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Dramatic warm lantern & cyan rim light cone inside Quiet Challenge */
+    .quiet-dramatic-glow {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 68% 48% at 50% 62%, rgba(255, 174, 66, 0.24) 0%, transparent 72%),
+        radial-gradient(ellipse 60% 42% at 50% 44%, rgba(100, 240, 255, 0.18) 0%, transparent 72%);
+      pointer-events: none;
+      z-index: 1;
+      transition: background 0.25s ease;
+    }
+    .quiet-card.noisy .quiet-dramatic-glow {
+      background: radial-gradient(ellipse 75% 65% at 50% 52%, rgba(255, 86, 82, 0.35) 0%, transparent 75%);
+    }
+
+    .quiet-header {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .quiet-status-badge {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      font-weight: 900;
+      padding: 4px 11px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #1b3654 0%, #10243a 100%);
+      border: 2px solid var(--cyan-glow);
+      color: var(--cyan-glow);
+      box-shadow: 0 3px 0 #07101c, 0 0 10px rgba(100, 240, 255, 0.35);
+      transition: all 0.2s ease;
+    }
+    .quiet-card.noisy .quiet-status-badge {
+      background: linear-gradient(180deg, #ff706b 0%, var(--alert-red) 100%);
+      border-color: #ffe2b3;
+      color: #fff;
+      box-shadow: 0 3px 0 #7a1715, 0 0 16px rgba(255, 86, 82, 0.8);
+      animation: badge-pulse 0.4s ease-in-out infinite alternate;
+    }
+    @keyframes badge-pulse {
+      from { transform: translateY(-50%) scale(1); }
+      to { transform: translateY(-50%) scale(1.09); }
+    }
+
+    .quiet-stage {
+      position: relative;
+      z-index: 2;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 132px;
+    }
+
+    /* Translucent Cyan Energy Shield Bubble (Ref 1 signature) */
+    .energy-shield-ring {
+      position: absolute;
+      width: clamp(152px, 14.8vw, 212px);
+      height: clamp(144px, 14vw, 200px);
+      border-radius: 50%;
+      border: 2.5px solid rgba(100, 240, 255, 0.55);
+      background: radial-gradient(circle at 35% 28%, rgba(160, 250, 255, 0.2) 0%, rgba(40, 185, 214, 0.08) 58%, rgba(100, 240, 255, 0.24) 100%);
+      box-shadow: 0 0 24px rgba(100, 240, 255, 0.32), inset 0 0 18px rgba(100, 240, 255, 0.25);
+      pointer-events: none;
+      animation: shield-pulse 3.6s ease-in-out infinite;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .quiet-card.noisy .energy-shield-ring {
+      border-color: rgba(255, 96, 86, 0.85);
+      background: radial-gradient(circle at 50% 50%, rgba(255, 100, 90, 0.14) 0%, rgba(255, 70, 60, 0.32) 100%);
+      box-shadow: 0 0 32px rgba(255, 86, 82, 0.7), inset 0 0 24px rgba(255, 120, 80, 0.45);
+    }
+    @keyframes shield-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.86; }
+      50% { transform: scale(1.035); opacity: 1; }
+    }
+
+    .quiet-penguin-wrap {
+      position: relative;
+      width: clamp(134px, 13.2vw, 190px);
+      height: clamp(134px, 13.2vw, 190px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .quiet-penguin-visual {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: penguin-sleep-breathe 3.4s ease-in-out infinite;
+      transform-origin: 50% 85%;
+      filter: drop-shadow(0 12px 14px rgba(0, 0, 0, 0.55));
+    }
+    .quiet-penguin-visual img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 20px;
+    }
+
+    .quiet-card.noisy .quiet-penguin-visual {
+      animation: penguin-startle 0.3s ease-in-out infinite;
+    }
+
+    @keyframes penguin-sleep-breathe {
+      0%, 100% { transform: rotate(-2deg) scale(1, 1); }
+      50% { transform: rotate(2deg) scale(1.03, 0.97); }
+    }
+
+    @keyframes penguin-startle {
+      0% { transform: translate(0, 0) rotate(-3deg) scale(1.04); }
+      25% { transform: translate(-3px, -5px) rotate(3deg) scale(1.07); }
+      50% { transform: translate(3px, -2px) rotate(-2deg) scale(1.05); }
+      75% { transform: translate(-2px, -4px) rotate(2deg) scale(1.07); }
+      100% { transform: translate(0, 0) rotate(-3deg) scale(1.04); }
+    }
+
+    .zzz-layer {
+      position: absolute;
+      top: 4px;
+      right: -10px;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .quiet-card.noisy .zzz-layer {
+      opacity: 0;
+    }
+    .zzz-char {
+      position: absolute;
+      font-weight: 900;
+      color: var(--cyan-glow);
+      -webkit-text-stroke: 1.5px var(--ink-outline);
+      text-shadow: 0 0 10px rgba(100, 240, 255, 0.8);
+      animation: float-zzz 2.8s ease-in-out infinite;
+    }
+    .zzz-1 { font-size: 16px; right: 24px; top: 28px; animation-delay: 0s; }
+    .zzz-2 { font-size: 22px; right: 8px; top: 10px; animation-delay: 0.7s; }
+    .zzz-3 { font-size: 28px; right: -10px; top: -10px; animation-delay: 1.4s; }
+
+    @keyframes float-zzz {
+      0% { opacity: 0; transform: translate(0, 10px) scale(0.75) rotate(-8deg); }
+      35% { opacity: 1; }
+      100% { opacity: 0; transform: translate(12px, -22px) scale(1.14) rotate(10deg); }
+    }
+
+    .alert-sparks {
+      position: absolute;
+      inset: -8px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .quiet-card.noisy .alert-sparks {
+      opacity: 1;
+    }
+
+    .quiet-controls {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(6px, 0.95vh, 10px);
+    }
+
+    .db-meter-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: 14px;
+      background: rgba(11, 22, 38, 0.88);
+      border: 2.5px solid var(--ink-outline);
+      box-shadow: 0 4px 0 #050b14, inset 0 1px 0 rgba(100, 240, 255, 0.35);
+    }
+
+    .db-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 26px;
+    }
+
+    .db-bar {
+      width: clamp(8px, 0.75vw, 12px);
+      border-radius: 4px;
+      background: rgba(110, 150, 185, 0.26);
+      border: 1px solid rgba(100, 240, 255, 0.18);
+      transition: background 0.08s ease, box-shadow 0.08s ease;
+    }
+    .db-bar.lit-green {
+      background: linear-gradient(180deg, #98ffec 0%, #39e5c6 100%);
+      border-color: #167a69;
+      box-shadow: 0 0 10px rgba(57, 229, 198, 0.85);
+    }
+    .db-bar.lit-yellow {
+      background: linear-gradient(180deg, #fff08a 0%, #ffc43d 100%);
+      border-color: #9e6b14;
+      box-shadow: 0 0 10px rgba(255, 196, 61, 0.85);
+    }
+    .db-bar.lit-orange {
+      background: linear-gradient(180deg, #ffb45c 0%, #ff7d2e 100%);
+      border-color: #9c4311;
+      box-shadow: 0 0 12px rgba(255, 125, 46, 0.9);
+    }
+    .db-bar.lit-red {
+      background: linear-gradient(180deg, #ff8278 0%, #ff3e38 100%);
+      border-color: #8c1a16;
+      box-shadow: 0 0 14px rgba(255, 62, 56, 0.95);
+    }
+
+    .quiet-btn-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 3px;
+    }
+
+    .quiet-start-btn {
+      padding: 8px 38px;
+      border-radius: 15px;
+      font-size: clamp(16px, 1.3vw, 21px);
+      letter-spacing: 0.12em;
+      color: #fffef9;
+      background: linear-gradient(180deg, #ffc966 0%, #f58c2c 55%, #de6c16 100%);
+      box-shadow: 0 7px 0 #8a3608, 0 12px 20px rgba(0, 0, 0, 0.5), 0 0 18px rgba(255, 158, 52, 0.45);
+      text-shadow: 0 2px 0 rgba(120, 42, 8, 0.65);
+    }
+    .quiet-start-btn.listening {
+      background: linear-gradient(180deg, #ff8a80 0%, #ef4c42 55%, #cf2f27 100%);
+      box-shadow: 0 7px 0 #7d1612, 0 12px 20px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 76, 66, 0.6);
+    }
+    .quiet-start-btn:active {
+      box-shadow: 0 2px 0 #070e18;
+    }
+
+    .mic-notice {
+      font-size: 12px;
+      font-weight: 800;
+      color: #ffe2b3;
+      background: rgba(120, 26, 22, 0.92);
+      border: 1.5px solid #ff7c70;
+      padding: 4px 11px;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+    }
+    .mic-notice.visible {
+      display: block;
+    }
+
+    /* --- (C) Name Board Panel --- */
+    .clear-marks-btn {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 4px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--text-dark);
+      background: linear-gradient(180deg, #f3e4b2 0%, #dfc06c 100%);
+      box-shadow: 0 4px 0 #7c601c;
+    }
+    .clear-marks-btn:hover {
+      transform: translateY(calc(-50% - 2px));
+    }
+    .clear-marks-btn:active {
+      transform: translateY(calc(-50% + 2px));
+      box-shadow: 0 1px 0 #7c601c;
+    }
+
+    .student-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: clamp(7px, 0.72vw, 10px);
+      flex: 1;
+      align-content: center;
+      overflow-y: auto;
+      padding: 4px 4px 8px;
+      z-index: 2;
+    }
+
+    .student-tile {
+      aspect-ratio: 1.12 / 1;
+      min-height: 36px;
+      border-radius: 11px;
+      font-size: clamp(15px, 1.3vw, 21px);
+      font-weight: 900;
+      color: var(--text-dark);
+      background: linear-gradient(180deg, #f5faff 0%, #d2e2f2 58%, #b3c9e0 100%);
+      box-shadow: 0 6px 0 #48617a, 0 9px 14px rgba(0, 0, 0, 0.42);
+      position: relative;
+    }
+    .student-tile:active {
+      box-shadow: 0 1px 0 #48617a;
+    }
+
+    .student-tile.marked {
+      background: linear-gradient(180deg, #ff8f85 0%, var(--alert-red) 55%, #d6322b 100%);
+      border-color: #2b0706;
+      color: #ffffff;
+      text-shadow: 0 2px 0 rgba(120, 18, 14, 0.75);
+      box-shadow: 0 6px 0 #7a1714, 0 0 20px rgba(255, 86, 82, 0.75);
+      animation: mark-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes mark-pop {
+      0% { transform: scale(0.88); }
+      55% { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    /* ==================== BOTTOM ROW (VOXEL HANGAR DECK GROUP SCORING) ==================== */
+    .groups-card {
+      position: relative;
+      flex: 1.07;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(10px, 1.1vh, 15px) clamp(14px, 1.6vw, 24px) clamp(10px, 1.2vh, 15px);
+      overflow: hidden;
+      border-radius: var(--radius-card);
+      border: 2.5px solid var(--ink-outline);
+      background:
+        linear-gradient(180deg,
+          rgba(22, 40, 64, 0.88) 0%,
+          rgba(14, 27, 45, 0.92) 55%,
+          rgba(11, 23, 38, 0.96) 57%,
+          rgba(8, 17, 30, 0.98) 100%);
+      backdrop-filter: blur(12px);
+      box-shadow:
+        0 8px 0 #07101c,
+        0 18px 36px rgba(0, 0, 0, 0.56),
+        inset 0 2px 0 rgba(232, 207, 130, 0.35);
+    }
+
+    /* Reflective glossy hangar deck surface with warm amber & cyan floor streaks (Ref 2) */
+    .groups-card::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 44%;
+      background:
+        repeating-linear-gradient(90deg, rgba(100, 240, 255, 0.06) 0px, rgba(100, 240, 255, 0.06) 1px, transparent 1px, transparent 48px),
+        radial-gradient(ellipse 14% 70% at 9% 30%, rgba(255, 176, 68, 0.22) 0%, transparent 72%),
+        radial-gradient(ellipse 14% 70% at 26% 30%, rgba(100, 240, 255, 0.18) 0%, transparent 72%),
+        radial-gradient(ellipse 14% 70% at 42% 30%, rgba(255, 176, 68, 0.20) 0%, transparent 72%),
+        radial-gradient(ellipse 14% 70% at 58% 30%, rgba(100, 240, 255, 0.18) 0%, transparent 72%),
+        radial-gradient(ellipse 14% 70% at 74% 30%, rgba(255, 176, 68, 0.22) 0%, transparent 72%),
+        radial-gradient(ellipse 14% 70% at 91% 30%, rgba(100, 240, 255, 0.18) 0%, transparent 72%);
+      border-top: 2px solid rgba(100, 240, 255, 0.35);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .groups-row {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: clamp(8px, 1.1vw, 18px);
+      flex: 1;
+      min-height: 0;
+      align-items: end;
+    }
+
+    .group-slot {
+      position: relative;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 4px;
+    }
+
+    /* Sci-Fi Hangar Bay Alcove with Warm Lantern Overhead Light */
+    .group-arch {
+      position: absolute;
+      top: 16px;
+      left: 5%;
+      right: 5%;
+      bottom: 68px;
+      border-radius: 18px 18px 14px 14px;
+      background:
+        radial-gradient(ellipse 85% 48% at 50% 15%, rgba(255, 184, 78, 0.22) 0%, transparent 70%),
+        linear-gradient(180deg, rgba(35, 62, 96, 0.65) 0%, rgba(15, 29, 48, 0.85) 100%);
+      border: 2px solid rgba(130, 178, 222, 0.28);
+      box-shadow: inset 0 6px 18px rgba(0, 0, 0, 0.48), 0 0 12px rgba(100, 240, 255, 0.08);
+      z-index: 0;
+    }
+    .group-arch::after {
+      content: "";
+      position: absolute;
+      top: 6px;
+      left: 26%;
+      right: 26%;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--amber-glow);
+      box-shadow: 0 0 14px rgba(255, 174, 66, 0.9);
+    }
+
+    .group-name-tag {
+      position: relative;
+      z-index: 3;
+      padding: 4px 16px;
+      border-radius: 11px;
+      font-size: clamp(14px, 1.15vw, 18px);
+      font-weight: 900;
+      color: var(--text-dark);
+      background: linear-gradient(180deg, #fae7a8 0%, #e4c164 60%, #cca241 100%);
+      border: 2px solid var(--ink-outline);
+      box-shadow: 0 4px 0 #7a5c18, 0 6px 12px rgba(0, 0, 0, 0.4);
+      margin-bottom: auto;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .group-stage {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      min-height: 92px;
+      margin-top: 2px;
+    }
+
+    .group-penguin-wrap {
+      position: relative;
+      width: clamp(104px, 10vw, 152px);
+      height: clamp(104px, 10vw, 152px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      animation: penguin-idle 3.2s ease-in-out infinite;
+      transform-origin: 50% 90%;
+      filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.52));
+      z-index: 2;
+    }
+
+    .group-slot:nth-child(2) .group-penguin-wrap { animation-delay: -0.5s; animation-duration: 2.9s; }
+    .group-slot:nth-child(3) .group-penguin-wrap { animation-delay: -1.1s; animation-duration: 3.5s; }
+    .group-slot:nth-child(4) .group-penguin-wrap { animation-delay: -1.7s; animation-duration: 3.1s; }
+    .group-slot:nth-child(5) .group-penguin-wrap { animation-delay: -2.2s; animation-duration: 3.4s; }
+    .group-slot:nth-child(6) .group-penguin-wrap { animation-delay: -0.9s; animation-duration: 3.0s; }
+
+    .group-penguin-wrap.celebrating {
+      animation: penguin-cheer 0.4s ease-in-out infinite !important;
+    }
+
+    .group-penguin-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 16px;
+    }
+
+    @keyframes penguin-idle {
+      0%, 100% { transform: rotate(-2.2deg) translateY(0px) scaleY(1); }
+      50% { transform: rotate(2.2deg) translateY(-4px) scaleY(1.028); }
+    }
+
+    @keyframes penguin-cheer {
+      0%, 100% { transform: translateY(0px) rotate(-5deg) scale(1.05); }
+      50% { transform: translateY(-16px) rotate(5deg) scale(1.12); }
+    }
+
+    /* Fish Pile around penguin */
+    .fish-pile {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .fish-item {
+      position: absolute;
+      width: clamp(23px, 2.1vw, 32px);
+      height: clamp(17px, 1.5vw, 23px);
+      animation: fish-pop 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+    }
+
+    @keyframes fish-pop {
+      0% { opacity: 0; transform: scale(0) translateY(12px) rotate(-22deg); }
+      65% { opacity: 1; transform: scale(1.28) translateY(-5px) rotate(6deg); }
+      100% { opacity: 1; transform: scale(1) translateY(0px) rotate(0deg); }
+    }
+
+    .group-celebrate-banner {
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 6;
+      background: linear-gradient(180deg, #ffe26a 0%, #f4a428 100%);
+      border: 2.5px solid var(--ink-outline);
+      color: var(--text-dark);
+      font-size: 13px;
+      font-weight: 900;
+      padding: 4px 12px;
+      border-radius: 10px;
+      white-space: nowrap;
+      box-shadow: 0 5px 0 #8f4d08, 0 0 20px rgba(255, 200, 66, 0.85);
+      animation: banner-bounce 0.45s ease-in-out infinite alternate;
+    }
+    @keyframes banner-bounce {
+      from { transform: translateX(-50%) scale(1); }
+      to { transform: translateX(-50%) scale(1.1); }
+    }
+
+    .group-footer {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .score-pill {
+      padding: 2px 14px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #1b3452 0%, #102238 100%);
+      border: 2px solid var(--cyan-glow);
+      box-shadow: 0 3px 0 #07101c, 0 0 10px rgba(100, 240, 255, 0.25);
+      font-size: clamp(14px, 1.18vw, 18px);
+      font-weight: 900;
+      color: #f3f9ff;
+      font-variant-numeric: tabular-nums;
+      min-width: 78px;
+      text-align: center;
+    }
+
+    .score-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding-bottom: 3px;
+    }
+
+    .plus-btn {
+      padding: 4px 22px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #e5f9ff 0%, #86def2 58%, #52bedb 100%);
+      box-shadow: 0 6px 0 #1f6680, 0 10px 16px rgba(0, 0, 0, 0.48), 0 0 12px rgba(100, 240, 255, 0.35);
+      font-size: clamp(15px, 1.22vw, 19px);
+      color: var(--text-dark);
+    }
+    .plus-btn:active {
+      box-shadow: 0 1px 0 #1f6680;
+    }
+
+    .minus-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: linear-gradient(180deg, #dce8f5 0%, #a0b8d1 100%);
+      box-shadow: 0 5px 0 #445b73;
+      font-size: 15px;
+      color: var(--text-dark);
+      padding: 0;
+      opacity: 0.9;
+    }
+    .minus-btn:hover {
+      opacity: 1;
+    }
+    .minus-btn:active {
+      box-shadow: 0 1px 0 #445b73;
+    }
+
+    /* ==================== MODALS ==================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 11, 20, 0.68);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 100;
+    }
+    .modal-backdrop.open {
+      display: flex;
+      animation: fade-in 0.18s ease;
+    }
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 680px;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      padding: 22px 24px;
+      position: relative;
+      background: linear-gradient(165deg, #1b304d 0%, #112138 100%);
+      border: 2.5px solid var(--ink-outline);
+      border-radius: 22px;
+      box-shadow: 0 10px 0 #07101c, 0 26px 52px rgba(0, 0, 0, 0.65), inset 0 2px 0 rgba(100, 240, 255, 0.35);
+      color: var(--text-main);
+      animation: modal-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .modal-box.timer-box {
+      max-width: 420px;
+    }
+    @keyframes modal-pop {
+      from { opacity: 0; transform: scale(0.92) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid rgba(100, 240, 255, 0.22);
+    }
+    .modal-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 900;
+      color: #f5faff;
+    }
+    .modal-close {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: linear-gradient(180deg, #e5f0fa 0%, #adc4dc 100%);
+      color: var(--text-dark);
+      font-size: 18px;
+      box-shadow: 0 5px 0 #48617a;
+    }
+
+    .modal-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      padding-bottom: 4px;
+    }
+    .modal-tab-btn {
+      padding: 7px 15px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text-dark);
+      background: linear-gradient(180deg, #dce9f5 0%, #a5bed6 100%);
+      box-shadow: 0 5px 0 #46607a;
+    }
+    .modal-tab-btn.active {
+      background: linear-gradient(180deg, #ffd070 0%, #f58c2c 100%);
+      color: #fff;
+      box-shadow: 0 5px 0 #8a3608;
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      flex: 1;
+      padding-right: 4px;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+
+    .form-section {
+      background: rgba(8, 17, 30, 0.52);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      border: 1.5px solid rgba(100, 240, 255, 0.2);
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--gold-trim);
+    }
+
+    .felt-input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 11px;
+      border: 2px solid #456a8c;
+      background: #0c192b;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f3f9ff;
+      outline: none;
+    }
+    .felt-input:focus {
+      border-color: var(--cyan-glow);
+      box-shadow: 0 0 0 3px rgba(100, 240, 255, 0.25);
+    }
+
+    .task-edit-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+
+    .small-action-btn {
+      padding: 7px 14px;
+      border-radius: 11px;
+      font-size: 13px;
+      font-weight: 900;
+      color: #fff;
+      background: linear-gradient(180deg, #ffc966 0%, #ef8428 100%);
+      box-shadow: 0 5px 0 #8a3608;
+      flex-shrink: 0;
+    }
+    .small-action-btn.danger {
+      background: linear-gradient(180deg, #ff857c 0%, #e5433b 100%);
+      box-shadow: 0 5px 0 #821712;
+    }
+    .small-action-btn.neutral {
+      background: linear-gradient(180deg, #e5f1fa 0%, #afc6dc 100%);
+      color: var(--text-dark);
+      box-shadow: 0 5px 0 #48617a;
+    }
+
+    .group-name-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .range-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--cyan-glow);
+      height: 8px;
+      cursor: pointer;
+    }
+    .range-value {
+      min-width: 54px;
+      text-align: center;
+      font-weight: 900;
+      background: #17304d;
+      color: var(--cyan-glow);
+      border: 1.5px solid rgba(100, 240, 255, 0.35);
+      padding: 4px 8px;
+      border-radius: 9px;
+    }
+
+    .upload-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .upload-card {
+      background: rgba(18, 34, 56, 0.85);
+      border-radius: 14px;
+      padding: 10px;
+      border: 1.5px solid rgba(100, 240, 255, 0.22);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .upload-preview {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: #0d1d33;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      font-size: 20px;
+    }
+    .upload-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .upload-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .upload-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 5px;
+      color: #eaf3ff;
+    }
+    .upload-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 2px solid rgba(100, 240, 255, 0.22);
+      flex-wrap: wrap;
+    }
+
+    .timer-presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .timer-preset-btn {
+      padding: 10px 8px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #e5f6ff 0%, #98d8eb 100%);
+      box-shadow: 0 5px 0 #2b6f85;
+      color: var(--text-dark);
+      font-size: 15px;
+    }
+    .timer-custom-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .timer-action-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      padding-bottom: 4px;
+    }
+    .timer-big-btn {
+      padding: 10px 22px;
+      border-radius: 13px;
+      font-size: 16px;
+      color: #fff;
+      background: linear-gradient(180deg, #ffc966 0%, #ef8428 100%);
+      box-shadow: 0 6px 0 #8a3608;
+    }
+    .timer-big-btn.secondary {
+      background: linear-gradient(180deg, #e5f1fa 0%, #afc6dc 100%);
+      color: var(--text-dark);
+      box-shadow: 0 6px 0 #48617a;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #10233b;
+      color: #f4faff;
+      border: 2px solid var(--cyan-glow);
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 14px;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55), 0 0 18px rgba(100, 240, 255, 0.35);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 150;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 1023px) {
+      .middle-grid {
+        grid-template-columns: 1fr;
+      }
+      .groups-row {
+        grid-template-columns: repeat(3, 1fr);
+        row-gap: 18px;
+      }
+      .groups-card {
+        min-height: 450px;
+      }
+      .group-arch {
+        bottom: 68px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .groups-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .mode-btn {
+        padding: 8px 16px;
+        font-size: 15px;
+      }
+      .group-name-grid,
+      .upload-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @keyframes flame-flicker {
+      0%, 100% { transform: scale(1) rotate(-1.5deg); opacity: 0.96; }
+      50% { transform: scale(1.07, 1.12) rotate(1.5deg); opacity: 1; }
+    }
+    .svg-flame {
+      transform-origin: 50% 80%;
+      animation: flame-flicker 0.55s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+  <!-- Voxel Sci-Fi Space Fleet + Dramatic Cinematic Lighting Backdrop (Zero Houses!) -->
+  <div class="scenery-bg" aria-hidden="true">
+    <div class="cinematic-lights"></div>
+    <div class="reflective-deck"></div>
+
+    <!-- Stylized Voxel Starfleet Cruisers & Cyan Energy Shields (Ref 1 inspired) -->
+    <svg class="bg-fleet-svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <radialGradient id="ship-shield" cx="50%" cy="50%" r="50%">
+          <stop offset="65%" stop-color="rgba(100, 240, 255, 0.04)"/>
+          <stop offset="92%" stop-color="rgba(100, 240, 255, 0.28)"/>
+          <stop offset="100%" stop-color="rgba(100, 240, 255, 0)"/>
+        </radialGradient>
+        <linearGradient id="thruster-beam" x1="1" y1="0" x2="0" y2="0">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="35%" stop-color="#64f0ff"/>
+          <stop offset="100%" stop-color="rgba(100, 240, 255, 0)"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Left Escort Voxel Cruisers -->
+      <g class="fleet-group-a" opacity="0.58">
+        <ellipse cx="180" cy="210" rx="135" ry="70" fill="url(#ship-shield)"/>
+        <polygon points="40,210 120,200 120,220" fill="url(#thruster-beam)"/>
+        <rect x="115" y="182" width="120" height="56" rx="4" fill="#dce7f2" stroke="#081220" stroke-width="3"/>
+        <rect x="135" y="168" width="76" height="22" fill="#8ea6c2" stroke="#081220" stroke-width="2.5"/>
+        <rect x="125" y="182" width="98" height="9" fill="#e8cf82"/>
+        <rect x="148" y="206" width="54" height="12" fill="#64f0ff"/>
+        <rect x="215" y="192" width="34" height="36" fill="#5e7896" stroke="#081220" stroke-width="2.5"/>
+      </g>
+
+      <!-- Right Distant Flagship & Escorts -->
+      <g class="fleet-group-b" opacity="0.52">
+        <ellipse cx="1690" cy="240" rx="175" ry="82" fill="url(#ship-shield)"/>
+        <polygon points="1500,240 1605,226 1605,254" fill="url(#thruster-beam)"/>
+        <rect x="1595" y="205" width="175" height="68" rx="4" fill="#e3edf7" stroke="#081220" stroke-width="3"/>
+        <rect x="1635" y="185" width="105" height="28" fill="#8ea6c2" stroke="#081220" stroke-width="2.5"/>
+        <rect x="1608" y="205" width="146" height="10" fill="#e8cf82"/>
+        <rect x="1632" y="232" width="84" height="14" fill="#64f0ff"/>
+        <rect x="1742" y="218" width="44" height="44" fill="#536d8a" stroke="#081220" stroke-width="2.5"/>
+      </g>
+
+      <!-- Mid-distance Tiny Voxel Drone Squadron -->
+      <g class="fleet-group-a" opacity="0.45">
+        <polygon points="820,120 880,114 880,126" fill="url(#thruster-beam)"/>
+        <rect x="875" y="106" width="66" height="28" fill="#dce7f2" stroke="#081220" stroke-width="2.2"/>
+        <rect x="884" y="106" width="46" height="6" fill="#e8cf82"/>
+        <rect x="896" y="118" width="28" height="6" fill="#64f0ff"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Ambient Starfield & Floating Warm/Cyan Light Motes Canvas -->
+  <canvas id="ambient-canvas"></canvas>
+
+  <!-- Interactive Sparkle, Shockwave & Confetti FX Canvas -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Main Dashboard -->
+  <main class="app-shell">
+    <!-- 1. TOP BAR -->
+    <header class="top-bar">
+      <nav class="mode-tray" aria-label="班級模式切換">
+        <button type="button" class="btn-3d mode-btn" data-mode="lunch">午膳</button>
+        <button type="button" class="btn-3d mode-btn" data-mode="reading">早讀</button>
+        <button type="button" class="btn-3d mode-btn active" data-mode="class">課堂</button>
+      </nav>
+
+      <div class="top-right">
+        <button type="button" id="clock-btn" class="btn-3d clock-pill" title="點擊開啟倒數計時器">
+          <span id="clock-display">10:15</span>
+          <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden="true">
+            <circle cx="18" cy="19" r="13" fill="#ff9e3d" stroke="#070e18" stroke-width="2.6"/>
+            <path d="M18 6 A13 13 0 0 1 31 19 L18 19 Z" fill="#ffd27d" opacity="0.6"/>
+            <circle cx="18" cy="19" r="9.2" fill="#f4faff" stroke="#070e18" stroke-width="2.2"/>
+            <path d="M18 19 L18 13 M18 19 L22.5 21" stroke="#0e1d30" stroke-width="2.6" stroke-linecap="round"/>
+            <path d="M8 8 L12 11 M28 8 L24 11" stroke="#070e18" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="18" cy="19" r="2.2" fill="#ff5652"/>
+          </svg>
+        </button>
+
+        <button type="button" id="settings-btn" class="btn-3d settings-pill">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" fill="#ffae42"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="#070e18" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>設定</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. MIDDLE ROW: 3 CORE CARDS -->
+    <section class="middle-grid" aria-label="核心管理功能">
+      <!-- (A) 當下任務 -->
+      <article class="panel-card cel-card">
+        <div class="card-header">
+          <h2 class="card-title">當下任務</h2>
+        </div>
+        <ul id="task-list" class="task-list"></ul>
+      </article>
+
+      <!-- (B) 安靜挑戰 -->
+      <article id="quiet-card" class="quiet-card">
+        <!-- Voxel Space Observation Deck & Glowing Lantern Floor (Zero Houses!) -->
+        <svg class="quiet-scenery-svg" viewBox="0 0 440 320" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="qd-space" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#07111e"/>
+              <stop offset="58%" stop-color="#132944"/>
+              <stop offset="100%" stop-color="#183657"/>
+            </linearGradient>
+            <linearGradient id="qd-floor" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#203752"/>
+              <stop offset="45%" stop-color="#14253b"/>
+              <stop offset="100%" stop-color="#0a1424"/>
+            </linearGradient>
+            <radialGradient id="qd-lantern-pool" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(255, 186, 78, 0.55)"/>
+              <stop offset="100%" stop-color="rgba(255, 186, 78, 0)"/>
+            </radialGradient>
+          </defs>
+          <rect width="440" height="320" fill="url(#qd-space)"/>
+          <!-- Twinkling background stars -->
+          <circle cx="52" cy="46" r="1.6" fill="#d8f6ff" opacity="0.8"/>
+          <circle cx="122" cy="30" r="1.2" fill="#fff0b8" opacity="0.7"/>
+          <circle cx="330" cy="42" r="1.8" fill="#d8f6ff" opacity="0.85"/>
+          <circle cx="390" cy="76" r="1.4" fill="#fff0b8" opacity="0.75"/>
+          <circle cx="88" cy="96" r="1.3" fill="#64f0ff" opacity="0.7"/>
+          <!-- Distant miniature voxel cruiser gliding outside viewport -->
+          <g opacity="0.78">
+            <rect x="306" y="76" width="70" height="24" rx="2" fill="#dce7f2" stroke="#070e18" stroke-width="2"/>
+            <rect x="314" y="76" width="52" height="5" fill="#e8cf82"/>
+            <rect x="322" y="86" width="32" height="6" fill="#64f0ff"/>
+            <polygon points="274,88 306,82 306,94" fill="#64f0ff" opacity="0.65"/>
+          </g>
+          <!-- Voxel side armor pillars with warm glowing lanterns (Ref 2 lighting) -->
+          <rect x="0" y="0" width="28" height="225" fill="#1c324d" stroke="#070e18" stroke-width="2.4"/>
+          <rect x="28" y="88" width="12" height="24" rx="2" fill="#ffbe55" stroke="#070e18" stroke-width="2"/>
+          <rect x="412" y="0" width="28" height="225" fill="#1c324d" stroke="#070e18" stroke-width="2.4"/>
+          <rect x="400" y="88" width="12" height="24" rx="2" fill="#ffbe55" stroke="#070e18" stroke-width="2"/>
+          <!-- Glossy Voxel Observation Deck Floor -->
+          <polygon points="0,208 440,208 440,320 0,320" fill="url(#qd-floor)" stroke="#070e18" stroke-width="2.4"/>
+          <!-- Cyan deck edge strip -->
+          <line x1="0" y1="209" x2="440" y2="209" stroke="#64f0ff" stroke-width="2.4" opacity="0.65"/>
+          <!-- Perspective voxel tile grid lines -->
+          <line x1="70" y1="208" x2="25" y2="320" stroke="rgba(100,240,255,0.12)" stroke-width="1.5"/>
+          <line x1="150" y1="208" x2="128" y2="320" stroke="rgba(100,240,255,0.12)" stroke-width="1.5"/>
+          <line x1="290" y1="208" x2="312" y2="320" stroke="rgba(100,240,255,0.12)" stroke-width="1.5"/>
+          <line x1="370" y1="208" x2="415" y2="320" stroke="rgba(100,240,255,0.12)" stroke-width="1.5"/>
+          <!-- Warm amber specular reflection pools on glossy floor -->
+          <ellipse cx="220" cy="228" rx="135" ry="26" fill="url(#qd-lantern-pool)"/>
+          <ellipse cx="44" cy="226" rx="46" ry="14" fill="url(#qd-lantern-pool)"/>
+          <ellipse cx="396" cy="226" rx="46" ry="14" fill="url(#qd-lantern-pool)"/>
+        </svg>
+        <div class="quiet-dramatic-glow" aria-hidden="true"></div>
+
+        <div class="quiet-header">
+          <h2 class="card-title">安靜挑戰</h2>
+          <span id="quiet-status-badge" class="quiet-status-badge">待命</span>
+        </div>
+
+        <div class="quiet-stage">
+          <div class="energy-shield-ring" aria-hidden="true"></div>
+          <div class="quiet-penguin-wrap">
+            <div id="quiet-penguin-visual" class="quiet-penguin-visual"></div>
+            <div class="zzz-layer" aria-hidden="true">
+              <span class="zzz-char zzz-1">Z</span>
+              <span class="zzz-char zzz-2">Z</span>
+              <span class="zzz-char zzz-3">Z</span>
+            </div>
+            <svg class="alert-sparks" viewBox="0 0 180 180" aria-hidden="true">
+              <path d="M18 42 L38 54 M12 74 L32 74 M162 42 L142 54 M168 74 L148 74" stroke="#ff5652" stroke-width="5.5" stroke-linecap="round"/>
+              <text x="136" y="34" font-size="28" font-weight="900" fill="#ff5652" stroke="#070e18" stroke-width="1.4">!</text>
+              <text x="26" y="34" font-size="26" font-weight="900" fill="#ffbe44" stroke="#070e18" stroke-width="1.4">!</text>
+            </svg>
+          </div>
+        </div>
+
+        <div class="quiet-controls">
+          <div class="db-meter-row" aria-label="即時音量分貝條">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" fill="#64f0ff" stroke="#070e18" stroke-width="1.8"/>
+              <path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" stroke="#64f0ff" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div id="db-bars" class="db-bars"></div>
+          </div>
+
+          <div class="quiet-btn-row">
+            <button type="button" id="quiet-toggle-btn" class="btn-3d quiet-start-btn">開始</button>
+          </div>
+          <div id="mic-notice" class="mic-notice">無法存取咪高峰，可於「⚙️ 設定 → 安靜挑戰」使用模擬音量滑桿測試。</div>
+        </div>
+      </article>
+
+      <!-- (C) 摘名版面 -->
+      <article class="panel-card cel-card">
+        <div class="card-header">
+          <h2 class="card-title">摘名版面</h2>
+          <button type="button" id="clear-marks-btn" class="btn-3d clear-marks-btn" title="清除所有紅色標記">一鍵清除</button>
+        </div>
+        <div id="student-grid" class="student-grid" role="group" aria-label="學生學號按鈕"></div>
+      </article>
+    </section>
+
+    <!-- 3. BOTTOM ROW: GROUP SCORING -->
+    <section class="groups-card" aria-label="組別加分">
+      <div class="card-header" style="margin-bottom: clamp(4px, 0.6vh, 9px);">
+        <h2 class="card-title">組別加分</h2>
+      </div>
+      <div id="groups-row" class="groups-row"></div>
+    </section>
+  </main>
+
+  <!-- ==================== COUNTDOWN TIMER MODAL ==================== -->
+  <div id="timer-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="timer-modal-title">
+    <div class="modal-box timer-box">
+      <div class="modal-header">
+        <h3 id="timer-modal-title" class="modal-title">⏱️ 課室倒數計時器</h3>
+        <button type="button" class="btn-3d modal-close" data-close-modal="timer-modal" aria-label="關閉">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-section">
+          <span class="form-label">快速選擇時間</span>
+          <div class="timer-presets">
+            <button type="button" class="btn-3d timer-preset-btn" data-timer-min="1">1 分鐘</button>
+            <button type="button" class="btn-3d timer-preset-btn" data-timer-min="3">3 分鐘</button>
+            <button type="button" class="btn-3d timer-preset-btn" data-timer-min="5">5 分鐘</button>
+            <button type="button" class="btn-3d timer-preset-btn" data-timer-min="10">10 分鐘</button>
+          </div>
+          <label class="form-label" for="timer-custom-input">自訂分鐘數</label>
+          <div class="timer-custom-row">
+            <input id="timer-custom-input" class="felt-input" type="number" min="1" max="120" value="5" />
+            <span style="font-weight:800; white-space:nowrap;">分鐘</span>
+          </div>
+          <div class="timer-action-row">
+            <button type="button" id="timer-start-btn" class="btn-3d timer-big-btn">開始倒數</button>
+            <button type="button" id="timer-pause-btn" class="btn-3d timer-big-btn secondary">暫停</button>
+            <button type="button" id="timer-reset-btn" class="btn-3d timer-big-btn secondary">返回時鐘</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SETTINGS MODAL ==================== -->
+  <div id="settings-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="settings-modal-title" class="modal-title">⚙️ 班級平台設定</h3>
+        <button type="button" class="btn-3d modal-close" data-close-modal="settings-modal" aria-label="關閉">✕</button>
+      </div>
+
+      <div class="modal-tabs" role="tablist">
+        <button type="button" class="btn-3d modal-tab-btn active" data-stab="tasks">任務清單</button>
+        <button type="button" class="btn-3d modal-tab-btn" data-stab="class">班級與組別</button>
+        <button type="button" class="btn-3d modal-tab-btn" data-stab="quiet">安靜挑戰</button>
+        <button type="button" class="btn-3d modal-tab-btn" data-stab="images">自訂企鵝圖片</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Tab 1: Edit Tasks -->
+        <div id="stab-tasks" class="tab-pane active">
+          <div class="form-section">
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <button type="button" class="btn-3d small-action-btn neutral task-mode-switch" data-edit-mode="lunch">午膳</button>
+              <button type="button" class="btn-3d small-action-btn neutral task-mode-switch" data-edit-mode="reading">早讀</button>
+              <button type="button" class="btn-3d small-action-btn task-mode-switch" data-edit-mode="class">課堂</button>
+            </div>
+            <div id="task-editor-list"></div>
+            <div style="display:flex; gap:8px; margin-top:10px;">
+              <input id="new-task-input" class="felt-input" type="text" placeholder="輸入新任務內容..." />
+              <button type="button" id="add-task-btn" class="btn-3d small-action-btn">新增任務</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Class & Groups -->
+        <div id="stab-class" class="tab-pane">
+          <div class="form-section">
+            <label class="form-label" for="student-count-range">「摘名版面」學生總人數（20 至 40 人）</label>
+            <div class="range-row">
+              <input id="student-count-range" type="range" min="20" max="40" value="30" />
+              <span id="student-count-val" class="range-value">30 人</span>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <span class="form-label">六組名稱設定</span>
+            <div id="group-name-inputs" class="group-name-grid"></div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Quiet Challenge Sensitivity & Simulator -->
+        <div id="stab-quiet" class="tab-pane">
+          <div class="form-section">
+            <label class="form-label" for="mic-device-select">選擇收音咪高峰裝置</label>
+            <select id="mic-device-select" class="felt-input">
+              <option value="">系統預設咪高峰</option>
+            </select>
+          </div>
+          <div class="form-section">
+            <label class="form-label" for="noise-threshold-range">觸發企鵝驚醒的音量門檻（數值越低越敏感）</label>
+            <div class="range-row">
+              <input id="noise-threshold-range" type="range" min="15" max="90" value="55" />
+              <span id="noise-threshold-val" class="range-value">55</span>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label class="form-label" for="sim-volume-range">模擬音量測試滑桿（無需咪高峰亦可測試企鵝反應）</label>
+            <div class="range-row">
+              <input id="sim-volume-range" type="range" min="0" max="100" value="0" />
+              <span id="sim-volume-val" class="range-value">0</span>
+            </div>
+            <p style="margin:8px 0 0; font-size:13px; color:#adc4de;">
+              拖動此滑桿超過門檻即可即時觸發企鵝驚醒；拉回低於門檻並保持 2 秒，企鵝會自動變回睡覺狀態。
+            </p>
+          </div>
+        </div>
+
+        <!-- Tab 4: Custom Penguin Images -->
+        <div id="stab-images" class="tab-pane">
+          <div class="form-section">
+            <span class="form-label">上傳本地圖片替換企鵝外觀（自動壓縮並儲存於本機）</span>
+            <div id="custom-image-grid" class="upload-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" id="reset-scores-btn" class="btn-3d small-action-btn neutral">重設所有分數</button>
+          <button type="button" id="reset-all-btn" class="btn-3d small-action-btn danger">恢復預設設定</button>
+        </div>
+        <button type="button" class="btn-3d small-action-btn" data-close-modal="settings-modal">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const STORAGE_KEY = 'hk_felt_penguin_classroom_v1';
+
+      const DEFAULT_STATE = {
+        mode: 'class',
+        studentCount: 30,
+        markedStudents: [],
+        noiseThreshold: 55,
+        tasks: {
+          lunch: [
+            { id: 'l1', text: '排隊洗手及領取午膳', done: false },
+            { id: 'l2', text: '安坐座位安靜進食', done: false },
+            { id: 'l3', text: '珍惜食物，保持桌面清潔', done: false },
+            { id: 'l4', text: '飯後收拾餐具及閱讀圖書', done: false }
+          ],
+          reading: [
+            { id: 'r1', text: '交齊功課及手冊', done: false },
+            { id: 'r2', text: '拿出課外書安靜閱讀', done: false },
+            { id: 'r3', text: '保持課室寧靜，不隨意走動', done: false },
+            { id: 'r4', text: '預備第一節課堂用品', done: false }
+          ],
+          class: [
+            { id: 'c1', text: '拿出課本及文具', done: true },
+            { id: 'c2', text: '專心聽講', done: true },
+            { id: 'c3', text: '舉手發言', done: false },
+            { id: 'c4', text: '完成課堂工作紙', done: false },
+            { id: 'c5', text: '整理桌面並抄寫手冊', done: false }
+          ]
+        },
+        groups: [
+          { id: 0, name: '第一組', score: 4 },
+          { id: 1, name: '第二組', score: 6 },
+          { id: 2, name: '第三組', score: 3 },
+          { id: 3, name: '第四組', score: 5 },
+          { id: 4, name: '第五組', score: 2 },
+          { id: 5, name: '第六組', score: 7 }
+        ],
+        customImages: {
+          quietSleep: '',
+          quietAwake: '',
+          group0: '',
+          group1: '',
+          group2: '',
+          group3: '',
+          group4: '',
+          group5: ''
+        }
+      };
+
+      function deepClone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return deepClone(DEFAULT_STATE);
+          const parsed = JSON.parse(raw);
+          const merged = deepClone(DEFAULT_STATE);
+          if (parsed.mode && ['lunch', 'reading', 'class'].includes(parsed.mode)) merged.mode = parsed.mode;
+          if (typeof parsed.studentCount === 'number') merged.studentCount = Math.min(40, Math.max(20, parsed.studentCount));
+          if (Array.isArray(parsed.markedStudents)) merged.markedStudents = parsed.markedStudents;
+          if (typeof parsed.noiseThreshold === 'number') merged.noiseThreshold = Math.min(90, Math.max(15, parsed.noiseThreshold));
+          if (parsed.tasks && typeof parsed.tasks === 'object') {
+            ['lunch', 'reading', 'class'].forEach(k => {
+              if (Array.isArray(parsed.tasks[k])) merged.tasks[k] = parsed.tasks[k];
+            });
+          }
+          if (Array.isArray(parsed.groups) && parsed.groups.length === 6) {
+            merged.groups = parsed.groups.map((g, i) => ({
+              id: i,
+              name: typeof g.name === 'string' && g.name.trim() ? g.name : DEFAULT_STATE.groups[i].name,
+              score: typeof g.score === 'number' ? Math.min(10, Math.max(0, g.score)) : 0
+            }));
+          }
+          if (parsed.customImages && typeof parsed.customImages === 'object') {
+            merged.customImages = Object.assign(merged.customImages, parsed.customImages);
+          }
+          return merged;
+        } catch (err) {
+          return deepClone(DEFAULT_STATE);
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (err) {
+          showToast('儲存空間已滿，建議使用較小的自訂圖片。');
+        }
+      }
+
+      let state = loadState();
+      let editingTaskMode = state.mode;
+      let celebratingGroups = {};
+      let confirmResetScores = false;
+      let confirmResetAll = false;
+
+      /* ==================== SOUND EFFECTS (Web Audio API) ==================== */
+      let sharedAudioCtx = null;
+      function getAudioCtx() {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+        if (sharedAudioCtx.state === 'suspended') {
+          sharedAudioCtx.resume().catch(() => {});
+        }
+        return sharedAudioCtx;
+      }
+
+      function playPopSound(pitch = 560) {
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(pitch * 1.45, now + 0.09);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.13);
+      }
+
+      function playCheerSound() {
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        const now = ctx.currentTime;
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          const start = now + idx * 0.09;
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.001, start);
+          gain.gain.linearRampToValueAtTime(0.18, start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.42);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.45);
+        });
+      }
+
+      function playGentleChime() {
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        const notes = [659.25, 880, 659.25, 880];
+        const now = ctx.currentTime;
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          const t = now + i * 0.22;
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.16, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.36);
+        });
+      }
+
+      /* ==================== TOAST ==================== */
+      let toastTimer = null;
+      function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+      }
+
+      /* ==================== DRAMATIC CEL-SHADED (三渲二) PENGUIN SVGS ==================== */
+      function getQuietPenguinSVG(isAwake) {
+        if (isAwake && state.customImages.quietAwake) {
+          return `<img src="${state.customImages.quietAwake}" alt="驚醒企鵝" />`;
+        }
+        if (!isAwake && state.customImages.quietSleep) {
+          return `<img src="${state.customImages.quietSleep}" alt="睡覺企鵝" />`;
+        }
+
+        const eyes = isAwake
+          ? `
+            <circle cx="75" cy="74" r="10.5" fill="#ffffff" stroke="#070e18" stroke-width="2.6"/>
+            <circle cx="76.5" cy="74" r="4.6" fill="#070e18"/>
+            <circle cx="78.5" cy="71.5" r="2" fill="#ffffff"/>
+            <circle cx="115" cy="74" r="10.5" fill="#ffffff" stroke="#070e18" stroke-width="2.6"/>
+            <circle cx="113.5" cy="74" r="4.6" fill="#070e18"/>
+            <circle cx="115.5" cy="71.5" r="2" fill="#ffffff"/>
+          `
+          : `
+            <path d="M66 76 Q75 84 84 76" fill="none" stroke="#070e18" stroke-width="3.4" stroke-linecap="round"/>
+            <path d="M106 76 Q115 84 124 76" fill="none" stroke="#070e18" stroke-width="3.4" stroke-linecap="round"/>
+          `;
+
+        const beak = isAwake
+          ? `
+            <ellipse cx="95" cy="90" rx="10.5" ry="8.5" fill="#ffbe44" stroke="#070e18" stroke-width="2.4"/>
+            <ellipse cx="95" cy="92" rx="5.5" ry="4.5" fill="#e54c42"/>
+          `
+          : `
+            <path d="M86 83 Q95 78 104 83 Q95 94 86 83 Z" fill="#ffc44d" stroke="#070e18" stroke-width="2.4" stroke-linejoin="round"/>
+            <path d="M89 83 Q95 81 100 83" stroke="#fff6d4" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+          `;
+
+        const wingsAndFish = isAwake
+          ? `
+            <ellipse cx="37" cy="95" rx="14" ry="26" transform="rotate(-38 37 95)" fill="#7790c7" stroke="#070e18" stroke-width="2.8"/>
+            <ellipse cx="153" cy="95" rx="14" ry="26" transform="rotate(38 153 95)" fill="#495f8f" stroke="#070e18" stroke-width="2.8"/>
+            <g transform="translate(106, 129) rotate(14)">
+              <ellipse cx="0" cy="0" rx="16" ry="9" fill="#ff9eb0" stroke="#070e18" stroke-width="2.2"/>
+              <path d="M13 0 L24 -7 L24 7 Z" fill="#e87086" stroke="#070e18" stroke-width="2.2" stroke-linejoin="round"/>
+              <circle cx="-7" cy="-1.5" r="2.2" fill="#070e18"/>
+            </g>
+          `
+          : `
+            <g transform="translate(95, 114) rotate(-28)">
+              <ellipse cx="0" cy="0" rx="19" ry="10.5" fill="#ffa3b5" stroke="#070e18" stroke-width="2.4"/>
+              <path d="M-12 -5 A16 8 0 0 1 10 -4" fill="none" stroke="#ffe8ee" stroke-width="2.6" stroke-linecap="round"/>
+              <path d="M16 0 L29 -9 L27 9 Z" fill="#e67289" stroke="#070e18" stroke-width="2.4" stroke-linejoin="round"/>
+              <circle cx="-9" cy="-2" r="2.3" fill="#070e18"/>
+            </g>
+            <ellipse cx="55" cy="112" rx="13.5" ry="24" transform="rotate(-32 55 112)" fill="#7790c7" stroke="#070e18" stroke-width="2.8"/>
+            <ellipse cx="135" cy="112" rx="13.5" ry="24" transform="rotate(32 135 112)" fill="#495f8f" stroke="#070e18" stroke-width="2.8"/>
+          `;
+
+        return `
+          <svg viewBox="0 0 190 186" width="100%" height="100%" aria-label="${isAwake ? '驚醒企鵝' : '睡覺企鵝'}">
+            <defs>
+              <clipPath id="qp-clip"><ellipse cx="95" cy="102" rx="56" ry="60"/></clipPath>
+            </defs>
+            <!-- Glossy warm amber + dark reflection shadow under penguin -->
+            <ellipse cx="96" cy="166" rx="56" ry="11" fill="rgba(5, 12, 22, 0.55)"/>
+            <ellipse cx="95" cy="165" rx="42" ry="6" fill="rgba(255, 184, 78, 0.35)"/>
+            <!-- Base body -->
+            <ellipse cx="95" cy="102" rx="56" ry="60" fill="#7790c7" stroke="#070e18" stroke-width="3.2"/>
+            <!-- Deep high-contrast Cel-Shadow crescent -->
+            <path d="M115 44 C150 68 156 126 114 158 C142 152 158 122 154 90 C150 62 135 48 115 44 Z" fill="#465b8c" clip-path="url(#qp-clip)"/>
+            <!-- Warm Amber Key Rim-Light (top-left) + Cool Cyan Edge Rim (right) -->
+            <path d="M47 74 A48 52 0 0 1 92 47" fill="none" stroke="#ffe1a8" stroke-width="5.2" stroke-linecap="round" opacity="0.9"/>
+            <path d="M138 66 A50 54 0 0 1 146 118" fill="none" stroke="#64f0ff" stroke-width="3.2" stroke-linecap="round" opacity="0.72"/>
+            <!-- Belly -->
+            <ellipse cx="95" cy="111" rx="40" ry="44" fill="#fffdf6" stroke="#070e18" stroke-width="2.2"/>
+            <path d="M118 80 C134 102 128 138 96 152 C122 152 138 132 136 106 C134 92 126 84 118 80 Z" fill="#dbe6f2"/>
+            <!-- Rosy cheeks -->
+            <ellipse cx="63" cy="88" rx="9" ry="5.5" fill="#ff9ca8" opacity="0.78"/>
+            <ellipse cx="127" cy="88" rx="9" ry="5.5" fill="#ff9ca8" opacity="0.78"/>
+            ${eyes}
+            ${beak}
+            ${wingsAndFish}
+            <!-- Yellow feet -->
+            <ellipse cx="73" cy="156" rx="14" ry="8.5" transform="rotate(-12 73 156)" fill="#ffca52" stroke="#070e18" stroke-width="2.5"/>
+            <ellipse cx="117" cy="156" rx="14" ry="8.5" transform="rotate(12 117 156)" fill="#e3a62e" stroke="#070e18" stroke-width="2.5"/>
+          </svg>
+        `;
+      }
+
+      function getGroupPenguinSVG(idx) {
+        const customKey = 'group' + idx;
+        if (state.customImages[customKey]) {
+          return `<img src="${state.customImages[customKey]}" alt="${escapeHtml(state.groups[idx].name)}企鵝" />`;
+        }
+
+        const shadowAndFeet = `
+          <ellipse cx="76" cy="138" rx="40" ry="8.5" fill="rgba(5, 11, 20, 0.56)"/>
+          <ellipse cx="75" cy="137" rx="28" ry="4.5" fill="rgba(100, 240, 255, 0.25)"/>
+          <ellipse cx="59" cy="131" rx="11" ry="6.5" fill="#ffca52" stroke="#070e18" stroke-width="2.4"/>
+          <ellipse cx="91" cy="131" rx="11" ry="6.5" fill="#e0a32c" stroke="#070e18" stroke-width="2.4"/>
+        `;
+
+        const baseBody = `
+          <ellipse cx="75" cy="86" rx="40" ry="46" fill="#7790c7" stroke="#070e18" stroke-width="3"/>
+          <!-- Deep Cel-Shadow step -->
+          <path d="M90 44 C114 62 116 108 86 129 C108 124 117 104 115 82 C113 62 104 49 90 44 Z" fill="#465b8c"/>
+          <!-- Dramatic Warm Amber Top-Left Rim + Cool Cyan Right Rim -->
+          <path d="M42 66 A34 38 0 0 1 72 44" fill="none" stroke="#ffe1a8" stroke-width="4.4" stroke-linecap="round" opacity="0.92"/>
+          <path d="M108 62 A36 42 0 0 1 112 104" fill="none" stroke="#64f0ff" stroke-width="2.8" stroke-linecap="round" opacity="0.7"/>
+          <!-- Belly -->
+          <ellipse cx="75" cy="95" rx="28" ry="33" fill="#fffdf7" stroke="#070e18" stroke-width="2.2"/>
+          <path d="M92 72 C102 88 98 114 76 125 C94 125 104 110 103 92 C102 81 97 75 92 72 Z" fill="#dbe6f2"/>
+          <ellipse cx="53" cy="76" rx="6.5" ry="4" fill="#ff9da9" opacity="0.76"/>
+          <ellipse cx="97" cy="76" rx="6.5" ry="4" fill="#ff9da9" opacity="0.76"/>
+        `;
+
+        const cuteFace = `
+          <circle cx="62" cy="67" r="5.3" fill="#070e18"/>
+          <circle cx="63.8" cy="65.2" r="2.1" fill="#ffffff"/>
+          <circle cx="60.5" cy="68.8" r="1.1" fill="#64f0ff"/>
+          <circle cx="88" cy="67" r="5.3" fill="#070e18"/>
+          <circle cx="89.8" cy="65.2" r="2.1" fill="#ffffff"/>
+          <circle cx="86.5" cy="68.8" r="1.1" fill="#64f0ff"/>
+          <path d="M67 72 Q75 67 83 72 Q75 82 67 72 Z" fill="#ffc44d" stroke="#070e18" stroke-width="2.2" stroke-linejoin="round"/>
+        `;
+
+        // 0: 博士企鵝
+        if (idx === 0) {
+          return `
+            <svg viewBox="0 0 150 148" width="100%" height="100%">
+              ${shadowAndFeet}
+              <ellipse cx="38" cy="92" rx="10" ry="20" transform="rotate(14 38 92)" fill="#7790c7" stroke="#070e18" stroke-width="2.6"/>
+              <ellipse cx="112" cy="88" rx="10" ry="19" transform="rotate(-38 112 88)" fill="#465b8c" stroke="#070e18" stroke-width="2.6"/>
+              <line x1="110" y1="84" x2="142" y2="62" stroke="#070e18" stroke-width="5.2" stroke-linecap="round"/>
+              <line x1="110" y1="84" x2="142" y2="62" stroke="#e8cf82" stroke-width="2.6" stroke-linecap="round"/>
+              <circle cx="142" cy="62" r="3.8" fill="#64f0ff" stroke="#070e18" stroke-width="1.6"/>
+              ${baseBody}
+              ${cuteFace}
+              <path d="M75 82 L80 88 L77 109 L75 113 L73 109 L70 88 Z" fill="#ef534a" stroke="#070e18" stroke-width="2"/>
+              <circle cx="75" cy="84" r="4" fill="#c7362e" stroke="#070e18" stroke-width="1.8"/>
+              <rect x="57" y="34" width="36" height="12" rx="4" fill="#2c3a4f" stroke="#070e18" stroke-width="2.2"/>
+              <polygon points="75,20 112,33 75,44 38,33" fill="#3e516e" stroke="#070e18" stroke-width="2.4" stroke-linejoin="round"/>
+              <path d="M104 36 Q108 46 105 56" fill="none" stroke="#ffd25a" stroke-width="2.8" stroke-linecap="round"/>
+              <circle cx="105" cy="57" r="3.5" fill="#ffd25a" stroke="#070e18" stroke-width="1.6"/>
+            </svg>
+          `;
+        }
+
+        // 1: 熱血企鵝
+        if (idx === 1) {
+          return `
+            <svg viewBox="0 0 150 148" width="100%" height="100%">
+              <g class="svg-flame">
+                <path d="M26 124 C12 96 24 62 42 52 C42 36 58 22 75 14 C92 22 108 36 108 52 C126 62 138 96 124 124 Z" fill="#ff9436" stroke="#070e18" stroke-width="2.4"/>
+                <path d="M37 125 C28 100 37 72 50 63 C52 48 64 36 75 28 C86 36 98 48 100 63 C113 72 122 100 113 125 Z" fill="#ffe664"/>
+              </g>
+              ${shadowAndFeet}
+              <ellipse cx="38" cy="84" rx="10" ry="20" transform="rotate(-30 38 84)" fill="#7790c7" stroke="#070e18" stroke-width="2.6"/>
+              <ellipse cx="112" cy="84" rx="10" ry="20" transform="rotate(30 112 84)" fill="#465b8c" stroke="#070e18" stroke-width="2.6"/>
+              ${baseBody}
+              <circle cx="62" cy="69" r="5.2" fill="#070e18"/><circle cx="63.6" cy="67.2" r="2" fill="#fff"/>
+              <circle cx="88" cy="69" r="5.2" fill="#070e18"/><circle cx="89.6" cy="67.2" r="2" fill="#fff"/>
+              <path d="M55 61 L68 65 M95 61 L82 65" stroke="#070e18" stroke-width="2.8" stroke-linecap="round"/>
+              <path d="M67 74 Q75 69 83 74 Q75 84 67 74 Z" fill="#ffc44d" stroke="#070e18" stroke-width="2.2"/>
+              <path d="M44 55 Q75 46 106 55 L104 63 Q75 55 46 63 Z" fill="#f04e44" stroke="#070e18" stroke-width="2.2"/>
+              <circle cx="75" cy="54" r="4.2" fill="#fff8e6" stroke="#070e18" stroke-width="1.6"/>
+            </svg>
+          `;
+        }
+
+        // 2: 大廚企鵝
+        if (idx === 2) {
+          return `
+            <svg viewBox="0 0 150 148" width="100%" height="100%">
+              ${shadowAndFeet}
+              <g transform="translate(18, 42) rotate(-14)">
+                <rect x="6" y="42" width="7" height="18" rx="3" fill="#8c5c3a" stroke="#070e18" stroke-width="2"/>
+                <path d="M4 6 L17 14 L17 44 L4 44 Z" fill="#edf5fa" stroke="#070e18" stroke-width="2.2" stroke-linejoin="round"/>
+                <line x1="8" y1="12" x2="8" y2="39" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+              </g>
+              <g transform="translate(120, 98) rotate(78)">
+                <ellipse cx="0" cy="0" rx="14" ry="7.5" fill="#64f0ff" stroke="#070e18" stroke-width="2.2"/>
+                <path d="M12 0 L21 -6 L21 6 Z" fill="#32b8cf" stroke="#070e18" stroke-width="2.2" stroke-linejoin="round"/>
+                <circle cx="-7" cy="-1.5" r="2" fill="#070e18"/>
+              </g>
+              <ellipse cx="38" cy="92" rx="10" ry="19" transform="rotate(24 38 92)" fill="#7790c7" stroke="#070e18" stroke-width="2.6"/>
+              <ellipse cx="112" cy="92" rx="10" ry="19" transform="rotate(-24 112 92)" fill="#465b8c" stroke="#070e18" stroke-width="2.6"/>
+              ${baseBody}
+              ${cuteFace}
+              <path d="M52 86 L98 86 L104 124 Q75 131 46 124 Z" fill="#ff9eb2" stroke="#070e18" stroke-width="2.2" stroke-linejoin="round"/>
+              <path d="M58 86 Q56 76 62 74 M92 86 Q94 76 88 74" fill="none" stroke="#070e18" stroke-width="2.4" stroke-linecap="round"/>
+              <ellipse cx="73" cy="105" rx="9" ry="5" fill="none" stroke="#ffffff" stroke-width="2.2"/>
+              <path d="M82 105 L88 100 L88 110 Z" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+            </svg>
+          `;
+        }
+
+        // 3: 探險家企鵝
+        if (idx === 3) {
+          return `
+            <svg viewBox="0 0 150 148" width="100%" height="100%">
+              ${shadowAndFeet}
+              <line x1="30" y1="54" x2="36" y2="118" stroke="#070e18" stroke-width="5.2" stroke-linecap="round"/>
+              <line x1="30" y1="54" x2="36" y2="118" stroke="#c28e54" stroke-width="2.6" stroke-linecap="round"/>
+              <ellipse cx="26" cy="44" rx="16" ry="18" transform="rotate(-18 26 44)" fill="#e8fbff" fill-opacity="0.9" stroke="#070e18" stroke-width="2.4"/>
+              <path d="M16 40 L36 48 M20 32 L30 56" stroke="#76cad6" stroke-width="1.5"/>
+              <ellipse cx="39" cy="92" rx="10" ry="19" transform="rotate(20 39 92)" fill="#7790c7" stroke="#070e18" stroke-width="2.6"/>
+              <ellipse cx="111" cy="92" rx="10" ry="19" transform="rotate(-16 111 92)" fill="#465b8c" stroke="#070e18" stroke-width="2.6"/>
+              ${baseBody}
+              ${cuteFace}
+              <line x1="50" y1="84" x2="104" y2="112" stroke="#070e18" stroke-width="7.5" stroke-linecap="round"/>
+              <line x1="50" y1="84" x2="104" y2="112" stroke="#78c464" stroke-width="4" stroke-linecap="round"/>
+              <rect x="94" y="103" width="22" height="19" rx="5" fill="#78c464" stroke="#070e18" stroke-width="2.2"/>
+              <path d="M94 109 Q105 115 116 109" fill="none" stroke="#070e18" stroke-width="1.8"/>
+              <ellipse cx="75" cy="48" rx="42" ry="10" fill="#f0c874" stroke="#070e18" stroke-width="2.4"/>
+              <path d="M51 47 C51 28 99 28 99 47 Z" fill="#fae098" stroke="#070e18" stroke-width="2.4"/>
+              <path d="M52 44 Q75 49 98 44" fill="none" stroke="#ef584a" stroke-width="4.5"/>
+            </svg>
+          `;
+        }
+
+        // 4: 泳圈企鵝
+        if (idx === 4) {
+          return `
+            <svg viewBox="0 0 150 148" width="100%" height="100%">
+              ${shadowAndFeet}
+              <ellipse cx="38" cy="88" rx="10" ry="18" transform="rotate(18 38 88)" fill="#7790c7" stroke="#070e18" stroke-width="2.6"/>
+              <ellipse cx="112" cy="88" rx="10" ry="18" transform="rotate(-18 112 88)" fill="#465b8c" stroke="#070e18" stroke-width="2.6"/>
+              ${baseBody}
+              ${cuteFace}
+              <line x1="46" y1="50" x2="104" y2="50" stroke="#070e18" stroke-width="4.5" stroke-linecap="round"/>
+              <ellipse cx="62" cy="48" rx="11" ry="8" fill="#7ef2ff" stroke="#070e18" stroke-width="2.6"/>
+              <ellipse cx="88" cy="48" rx="11" ry="8" fill="#7ef2ff" stroke="#070e18" stroke-width="2.6"/>
+              <path d="M57 45 L62 45 M83 45 L88 45" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
+              <ellipse cx="75" cy="108" rx="47" ry="17" fill="#69d4f2" stroke="#070e18" stroke-width="2.6"/>
+              <path d="M35 107 Q75 123 115 107" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.88"/>
+              <ellipse cx="75" cy="104" rx="34" ry="8" fill="none" stroke="#070e18" stroke-width="1.8" opacity="0.35"/>
+            </svg>
+          `;
+        }
+
+        // 5: 潮酷企鵝
+        return `
+          <svg viewBox="0 0 150 148" width="100%" height="100%">
+            ${shadowAndFeet}
+            <ellipse cx="34" cy="70" rx="11" ry="22" transform="rotate(-38 34 70)" fill="#7790c7" stroke="#070e18" stroke-width="2.6"/>
+            <ellipse cx="112" cy="94" rx="10" ry="19" transform="rotate(-14 112 94)" fill="#465b8c" stroke="#070e18" stroke-width="2.6"/>
+            ${baseBody}
+            <path d="M67 75 Q75 70 83 75 Q75 84 67 75 Z" fill="#ffc44d" stroke="#070e18" stroke-width="2.2"/>
+            <rect x="46" y="55" width="26" height="18" rx="6" fill="#182436" stroke="#070e18" stroke-width="2.4"/>
+            <rect x="78" y="55" width="26" height="18" rx="6" fill="#182436" stroke="#070e18" stroke-width="2.4"/>
+            <line x1="72" y1="62" x2="78" y2="62" stroke="#070e18" stroke-width="3.4"/>
+            <path d="M51 60 L61 60 M83 60 L93 60" stroke="#64f0ff" stroke-width="2.6" stroke-linecap="round"/>
+          </svg>
+        `;
+      }
+
+      /* Cel-Shaded Fish SVG */
+      const FISH_COLORS = [
+        { body: '#ff9fb2', tail: '#e36f86' },
+        { body: '#70e8ff', tail: '#33b5d4' },
+        { body: '#ffc166', tail: '#e88b2c' }
+      ];
+
+      const FISH_POSITIONS = [
+        { left: '4%',  bottom: '4px',  rot: -10, flip: false },
+        { right: '4%', bottom: '4px',  rot: 8,   flip: true  },
+        { left: '12%', bottom: '20px', rot: 12,  flip: false },
+        { right: '10%',bottom: '22px', rot: -12, flip: true  },
+        { left: '2%',  bottom: '38px', rot: -6,  flip: false },
+        { right: '2%', bottom: '40px', rot: 10,  flip: true  },
+        { left: '14%', bottom: '56px', rot: 14,  flip: false },
+        { right: '12%',bottom: '58px', rot: -14, flip: true  },
+        { left: '4%',  bottom: '74px', rot: -8,  flip: false },
+        { right: '4%', bottom: '76px', rot: 8,   flip: true  }
+      ];
+
+      function createFishHTML(index) {
+        const col = FISH_COLORS[index % FISH_COLORS.length];
+        const pos = FISH_POSITIONS[index % FISH_POSITIONS.length];
+        const styleParts = [`bottom:${pos.bottom}`];
+        if (pos.left) styleParts.push(`left:${pos.left}`);
+        if (pos.right) styleParts.push(`right:${pos.right}`);
+        const scaleX = pos.flip ? -1 : 1;
+        return `
+          <div class="fish-item" style="${styleParts.join(';')}">
+            <svg viewBox="0 0 38 26" width="100%" height="100%" style="transform: scaleX(${scaleX}) rotate(${pos.rot}deg);">
+              <ellipse cx="15" cy="13" rx="11" ry="7.5" fill="${col.body}" stroke="#070e18" stroke-width="2.2"/>
+              <path d="M24 13 L34 6 L33 20 Z" fill="${col.tail}" stroke="#070e18" stroke-width="2.2" stroke-linejoin="round"/>
+              <circle cx="10" cy="11.5" r="2" fill="#070e18"/>
+              <path d="M13 8.5 Q18 9 20 11" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        `;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      /* ==================== RENDER FUNCTIONS ==================== */
+      function renderModes() {
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.mode === state.mode);
+        });
+      }
+
+      function renderTasks() {
+        const list = document.getElementById('task-list');
+        const items = state.tasks[state.mode] || [];
+        if (items.length === 0) {
+          list.innerHTML = `<li style="text-align:center; padding:24px; color:#adc4de; font-weight:700;">暫無任務，請按右上角「⚙️ 設定」新增。</li>`;
+          return;
+        }
+        list.innerHTML = items.map((item, idx) => `
+          <li class="task-item ${item.done ? 'checked' : ''} tint-${idx % 4}" data-task-id="${escapeHtml(item.id)}" role="checkbox" aria-checked="${item.done}" tabindex="0">
+            <span class="task-checkbox" aria-hidden="true">
+              <svg class="task-check-svg" viewBox="0 0 24 24">
+                <polyline points="4 13 9.5 18.5 20 6.5"></polyline>
+              </svg>
+            </span>
+            <span class="task-label">${escapeHtml(item.text)}</span>
+          </li>
+        `).join('');
+      }
+
+      function renderStudents() {
+        const grid = document.getElementById('student-grid');
+        const markedSet = new Set(state.markedStudents);
+        let html = '';
+        for (let i = 1; i <= state.studentCount; i++) {
+          const isMarked = markedSet.has(i);
+          html += `<button type="button" class="btn-3d student-tile ${isMarked ? 'marked' : ''}" data-student="${i}" aria-pressed="${isMarked}">${i}</button>`;
+        }
+        grid.innerHTML = html;
+      }
+
+      function renderGroups() {
+        const row = document.getElementById('groups-row');
+        row.innerHTML = state.groups.map((g, idx) => {
+          const isCelebrating = Boolean(celebratingGroups[idx]);
+          let fishHTML = '';
+          for (let f = 0; f < g.score; f++) {
+            fishHTML += createFishHTML(f);
+          }
+          return `
+            <div class="group-slot" data-group-idx="${idx}">
+              <div class="group-arch" aria-hidden="true"></div>
+              <div class="group-name-tag" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>
+              <div class="group-stage">
+                <div class="fish-pile">${fishHTML}</div>
+                <div class="group-penguin-wrap ${isCelebrating ? 'celebrating' : ''}">
+                  ${getGroupPenguinSVG(idx)}
+                </div>
+                ${isCelebrating ? '<div class="group-celebrate-banner">🎉 滿分達標！</div>' : ''}
+              </div>
+              <div class="group-footer">
+                <div class="score-pill">${g.score} / 10</div>
+                <div class="score-btn-group">
+                  <button type="button" class="btn-3d plus-btn" data-add-group="${idx}" aria-label="${escapeHtml(g.name)}加一分">+ 1</button>
+                  <button type="button" class="btn-3d minus-btn" data-sub-group="${idx}" title="扣回 1 分" aria-label="${escapeHtml(g.name)}減一分">−</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderQuietPenguin(isAwake) {
+        const visual = document.getElementById('quiet-penguin-visual');
+        visual.innerHTML = getQuietPenguinSVG(isAwake);
+      }
+
+      function buildDbBars() {
+        const container = document.getElementById('db-bars');
+        const heights = [10, 11, 13, 14, 16, 17, 19, 20, 22, 23, 24, 25, 25, 26];
+        container.innerHTML = heights.map((h, i) => `<div class="db-bar" data-bar="${i}" style="height:${h}px"></div>`).join('');
+      }
+
+      function updateDbBars(level) {
+        const bars = document.querySelectorAll('#db-bars .db-bar');
+        const litCount = Math.round((level / 100) * bars.length);
+        bars.forEach((bar, i) => {
+          bar.classList.remove('lit-green', 'lit-yellow', 'lit-orange', 'lit-red');
+          if (i < litCount) {
+            if (i < 6) bar.classList.add('lit-green');
+            else if (i < 9) bar.classList.add('lit-yellow');
+            else if (i < 12) bar.classList.add('lit-orange');
+            else bar.classList.add('lit-red');
+          }
+        });
+      }
+
+      /* ==================== QUIET CHALLENGE AUDIO MONITOR ==================== */
+      let micActive = false;
+      let micStream = null;
+      let micAudioCtx = null;
+      let micAnalyser = null;
+      let micSilentGain = null;
+      let micRafId = null;
+      let selectedMicId = '';
+      let penguinAwake = false;
+      let lastNoisyAt = 0;
+      let simVolume = 0;
+
+      async function populateMicDevices() {
+        const select = document.getElementById('mic-device-select');
+        if (!select || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioInputs = devices.filter(d => d.kind === 'audioinput');
+          const prev = selectedMicId || select.value;
+          select.innerHTML = '<option value="">系統預設咪高峰</option>' +
+            audioInputs.map((d, i) => `<option value="${escapeHtml(d.deviceId)}">${escapeHtml(d.label || ('咪高峰 ' + (i + 1)))}</option>`).join('');
+          if (prev) select.value = prev;
+        } catch (_) {}
+      }
+
+      function setQuietState(isNoisyNow, currentLevel = 0) {
+        const card = document.getElementById('quiet-card');
+        const badge = document.getElementById('quiet-status-badge');
+        const now = Date.now();
+
+        if (isNoisyNow) {
+          lastNoisyAt = now;
+          if (!penguinAwake) {
+            penguinAwake = true;
+            card.classList.add('noisy');
+            renderQuietPenguin(true);
+            playPopSound(320);
+            const rect = card.getBoundingClientRect();
+            launchShockwaveAt(rect.left + rect.width / 2, rect.top + rect.height * 0.45);
+          }
+          badge.textContent = `太嘈啦 (${currentLevel})`;
+        } else if (penguinAwake && now - lastNoisyAt >= 2000) {
+          penguinAwake = false;
+          card.classList.remove('noisy');
+          badge.textContent = micActive ? `監測中 (${currentLevel})` : (simVolume > 0 ? `模擬 (${currentLevel})` : '待命');
+          renderQuietPenguin(false);
+        } else if (!penguinAwake) {
+          badge.textContent = micActive ? `監測中 (${currentLevel})` : (simVolume > 0 ? `模擬 (${currentLevel})` : '待命');
+        }
+      }
+
+      function stopMicMonitor() {
+        micActive = false;
+        if (micRafId) {
+          cancelAnimationFrame(micRafId);
+          micRafId = null;
+        }
+        if (micStream) {
+          micStream.getTracks().forEach(t => t.stop());
+          micStream = null;
+        }
+        if (micSilentGain) {
+          try { micSilentGain.disconnect(); } catch (_) {}
+          micSilentGain = null;
+        }
+        if (micAudioCtx) {
+          micAudioCtx.close().catch(() => {});
+          micAudioCtx = null;
+        }
+        micAnalyser = null;
+        const btn = document.getElementById('quiet-toggle-btn');
+        btn.textContent = '開始';
+        btn.classList.remove('listening');
+        if (simVolume === 0) {
+          updateDbBars(0);
+          const badge = document.getElementById('quiet-status-badge');
+          if (!penguinAwake) badge.textContent = '待命';
+        }
+      }
+
+      async function startMicMonitor() {
+        const notice = document.getElementById('mic-notice');
+        notice.classList.remove('visible');
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          notice.textContent = '此瀏覽器或網址不支援咪高峰（需使用 https:// 或 localhost），可改用設定內的模擬滑桿。';
+          notice.classList.add('visible');
+          showToast('此瀏覽器不支援咪高峰收音，可使用設定中的模擬滑桿。');
+          return;
+        }
+
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) {
+          notice.textContent = '瀏覽器不支援 Web Audio API，請改用 Chrome 或 Edge。';
+          notice.classList.add('visible');
+          return;
+        }
+
+        try {
+          micAudioCtx = new Ctx();
+          if (micAudioCtx.state === 'suspended') {
+            await micAudioCtx.resume();
+          }
+
+          const audioConstraint = selectedMicId
+            ? { deviceId: { exact: selectedMicId } }
+            : true;
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint, video: false });
+          populateMicDevices();
+
+          if (micAudioCtx.state === 'suspended') {
+            await micAudioCtx.resume();
+          }
+
+          const tracks = micStream.getAudioTracks();
+          const trackLabel = tracks[0] ? tracks[0].label : '';
+          if (tracks[0] && tracks[0].muted) {
+            notice.textContent = `已連接「${trackLabel || '咪高峰'}」，但系統顯示裝置處於靜音狀態，請檢查電腦或外置咪高峰靜音鍵。`;
+            notice.classList.add('visible');
+          } else if (trackLabel) {
+            showToast(`已連接咪高峰：${trackLabel}`);
+          }
+
+          const source = micAudioCtx.createMediaStreamSource(micStream);
+          micAnalyser = micAudioCtx.createAnalyser();
+          micAnalyser.fftSize = 1024;
+          micAnalyser.smoothingTimeConstant = 0.72;
+
+          micSilentGain = micAudioCtx.createGain();
+          micSilentGain.gain.value = 0.0001;
+          source.connect(micAnalyser);
+          micAnalyser.connect(micSilentGain);
+          micSilentGain.connect(micAudioCtx.destination);
+
+          micActive = true;
+          const btn = document.getElementById('quiet-toggle-btn');
+          btn.textContent = '停止';
+          btn.classList.add('listening');
+          document.getElementById('quiet-status-badge').textContent = '監測中 (0)';
+
+          const timeData = new Float32Array(micAnalyser.fftSize);
+          const freqData = new Uint8Array(micAnalyser.frequencyBinCount);
+          let smoothedLevel = 0;
+
+          function loop() {
+            if (!micActive || !micAnalyser) return;
+            let rms = 0;
+            if (typeof micAnalyser.getFloatTimeDomainData === 'function') {
+              micAnalyser.getFloatTimeDomainData(timeData);
+              let sumSq = 0;
+              for (let i = 0; i < timeData.length; i++) {
+                sumSq += timeData[i] * timeData[i];
+              }
+              rms = Math.sqrt(sumSq / timeData.length);
+            }
+            micAnalyser.getByteFrequencyData(freqData);
+            let freqSum = 0;
+            for (let i = 0; i < freqData.length; i++) {
+              freqSum += freqData[i];
+            }
+            const freqAvg = freqSum / freqData.length;
+
+            const db = rms > 0.0001 ? 20 * Math.log10(rms) : -80;
+            const dbScore = Math.max(0, Math.min(100, ((db + 58) / 46) * 100));
+            const freqScore = Math.max(0, Math.min(100, freqAvg * 1.45));
+            const rawLevel = Math.round(Math.max(dbScore, freqScore));
+
+            smoothedLevel = Math.round(smoothedLevel * 0.55 + rawLevel * 0.45);
+            const effectiveLevel = Math.max(smoothedLevel, simVolume);
+
+            updateDbBars(effectiveLevel);
+            setQuietState(effectiveLevel >= state.noiseThreshold, effectiveLevel);
+            micRafId = requestAnimationFrame(loop);
+          }
+          loop();
+        } catch (err) {
+          const reasonMap = {
+            NotAllowedError: '咪高峰權限被拒絕，請檢查瀏覽器網址列鎖頭圖示及系統私隱設定。',
+            PermissionDeniedError: '咪高峰權限被拒絕，請檢查瀏覽器網址列鎖頭圖示及系統私隱設定。',
+            NotFoundError: '找不到任何可用的咪高峰裝置，請確認已接駁咪高峰。',
+            NotReadableError: '咪高峰正被其他程式佔用或無法讀取，請關閉其他錄音程式後重試。'
+          };
+          notice.textContent = reasonMap[err && err.name] || `無法啟動咪高峰（${(err && err.name) || '未知錯誤'}），可使用設定中的模擬滑桿測試。`;
+          notice.classList.add('visible');
+          showToast(notice.textContent);
+          stopMicMonitor();
+        }
+      }
+
+      setInterval(() => {
+        if (!micActive && (simVolume > 0 || penguinAwake)) {
+          updateDbBars(simVolume);
+          setQuietState(simVolume >= state.noiseThreshold, simVolume);
+        }
+      }, 150);
+
+      /* ==================== CLOCK & COUNTDOWN TIMER ==================== */
+      let timerMode = false;
+      let timerRunning = false;
+      let timerRemainingSec = 0;
+      let timerFinished = false;
+      let timerInterval = null;
+
+      function formatClockTime() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+
+      function formatTimerSec(sec) {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+
+      function updateClockUI() {
+        const display = document.getElementById('clock-display');
+        const pill = document.getElementById('clock-btn');
+        if (timerMode) {
+          display.textContent = formatTimerSec(timerRemainingSec);
+          pill.classList.toggle('timer-running', timerRunning && !timerFinished);
+          pill.classList.toggle('timer-finished', timerFinished);
+        } else {
+          display.textContent = formatClockTime();
+          pill.classList.remove('timer-running', 'timer-finished');
+        }
+      }
+
+      function startCountdown(minutes) {
+        const mins = Math.max(1, Math.min(120, Number(minutes) || 1));
+        clearInterval(timerInterval);
+        timerMode = true;
+        timerRunning = true;
+        timerFinished = false;
+        timerRemainingSec = Math.round(mins * 60);
+        updateClockUI();
+
+        timerInterval = setInterval(() => {
+          if (!timerRunning) return;
+          if (timerRemainingSec > 0) {
+            timerRemainingSec--;
+            updateClockUI();
+          }
+          if (timerRemainingSec <= 0) {
+            timerRunning = false;
+            timerFinished = true;
+            clearInterval(timerInterval);
+            updateClockUI();
+            playGentleChime();
+            showToast('⏰ 倒數計時結束！');
+          }
+        }, 1000);
+      }
+
+      function resetCountdownToClock() {
+        clearInterval(timerInterval);
+        timerMode = false;
+        timerRunning = false;
+        timerFinished = false;
+        timerRemainingSec = 0;
+        updateClockUI();
+      }
+
+      setInterval(() => {
+        if (!timerMode) updateClockUI();
+      }, 1000);
+
+      /* ==================== AMBIENT SPACE STARS + WARM/CYAN MOTES ==================== */
+      const ambientCanvas = document.getElementById('ambient-canvas');
+      const ambientCtx = ambientCanvas.getContext('2d');
+      let ambientMotes = [];
+      let bgStars = [];
+
+      function initAmbientCanvas() {
+        ambientCanvas.width = window.innerWidth;
+        ambientCanvas.height = window.innerHeight;
+        const count = Math.min(54, Math.max(26, Math.floor(window.innerWidth / 30)));
+        ambientMotes = [];
+        for (let i = 0; i < count; i++) {
+          ambientMotes.push({
+            x: Math.random() * ambientCanvas.width,
+            y: Math.random() * ambientCanvas.height,
+            r: 1.8 + Math.random() * 4.2,
+            vx: -0.22 - Math.random() * 0.35,
+            vy: -0.08 + Math.random() * 0.24,
+            phase: Math.random() * Math.PI * 2,
+            isAmber: Math.random() > 0.5
+          });
+        }
+        bgStars = [];
+        for (let i = 0; i < 60; i++) {
+          bgStars.push({
+            x: Math.random() * ambientCanvas.width,
+            y: Math.random() * ambientCanvas.height * 0.72,
+            r: 0.8 + Math.random() * 1.5,
+            phase: Math.random() * Math.PI * 2
+          });
+        }
+      }
+
+      function animateAmbient() {
+        ambientCtx.clearRect(0, 0, ambientCanvas.width, ambientCanvas.height);
+        const t = Date.now() * 0.0016;
+
+        for (let i = 0; i < bgStars.length; i++) {
+          const st = bgStars[i];
+          const a = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2 + st.phase));
+          ambientCtx.fillStyle = `rgba(218, 245, 255, ${a})`;
+          ambientCtx.beginPath();
+          ambientCtx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+          ambientCtx.fill();
+        }
+
+        for (let i = 0; i < ambientMotes.length; i++) {
+          const m = ambientMotes[i];
+          m.x += m.vx + Math.sin(t + m.phase) * 0.2;
+          m.y += m.vy;
+          if (m.x < -12) m.x = ambientCanvas.width + 12;
+          if (m.y > ambientCanvas.height + 12) m.y = -12;
+          if (m.y < -12) m.y = ambientCanvas.height + 12;
+
+          const alpha = 0.26 + 0.42 * (0.5 + 0.5 * Math.sin(t * 1.8 + m.phase));
+          const grad = ambientCtx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r * 2.8);
+          if (m.isAmber) {
+            grad.addColorStop(0, `rgba(255, 198, 92, ${alpha})`);
+            grad.addColorStop(1, 'rgba(255, 198, 92, 0)');
+          } else {
+            grad.addColorStop(0, `rgba(100, 240, 255, ${alpha})`);
+            grad.addColorStop(1, 'rgba(100, 240, 255, 0)');
+          }
+          ambientCtx.fillStyle = grad;
+          ambientCtx.beginPath();
+          ambientCtx.arc(m.x, m.y, m.r * 2.8, 0, Math.PI * 2);
+          ambientCtx.fill();
+        }
+        requestAnimationFrame(animateAmbient);
+      }
+
+      /* ==================== INTERACTIVE ANIME FX & CONFETTI ENGINE ==================== */
+      const confettiCanvas = document.getElementById('confetti-canvas');
+      const confettiCtx = confettiCanvas.getContext('2d');
+      let fxParticles = [];
+      let fxRings = [];
+      let fxRaf = null;
+
+      function resizeAllCanvases() {
+        confettiCanvas.width = window.innerWidth;
+        confettiCanvas.height = window.innerHeight;
+        initAmbientCanvas();
+      }
+      window.addEventListener('resize', resizeAllCanvases);
+      resizeAllCanvases();
+      animateAmbient();
+
+      function drawStar(ctx, r) {
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+          const a = (i * Math.PI) / 2;
+          ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+          const b = a + Math.PI / 4;
+          ctx.lineTo(Math.cos(b) * r * 0.32, Math.sin(b) * r * 0.32);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function launchSparkleBurst(x, y, palette) {
+        const colors = palette || ['#ffca52', '#64f0ff', '#ff9eb5', '#ffffff'];
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 2.4 + Math.random() * 5.6;
+          fxParticles.push({
+            type: i % 2 === 0 ? 'star' : 'drop',
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 1.6,
+            size: 5 + Math.random() * 6,
+            color: colors[i % colors.length],
+            rot: Math.random() * 360,
+            vRot: (Math.random() - 0.5) * 10,
+            gravity: 0.14,
+            life: 1,
+            decay: 0.024 + Math.random() * 0.014
+          });
+        }
+        fxRings.push({ x, y, r: 8, maxR: 52, color: colors[0], life: 0.9 });
+        if (!fxRaf) animateFX();
+      }
+
+      function launchShockwaveAt(x, y) {
+        fxRings.push({ x, y, r: 16, maxR: 128, color: '#ff5652', life: 0.95 });
+        fxRings.push({ x, y, r: 8, maxR: 92, color: '#ffbe44', life: 0.85 });
+        for (let i = 0; i < 16; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 3.5 + Math.random() * 5.8;
+          fxParticles.push({
+            type: 'star',
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 6 + Math.random() * 5,
+            color: i % 2 === 0 ? '#ff5652' : '#ffbe44',
+            rot: 0,
+            vRot: 8,
+            gravity: 0.06,
+            life: 1,
+            decay: 0.028
+          });
+        }
+        if (!fxRaf) animateFX();
+      }
+
+      function launchConfettiAt(originX, originY) {
+        const colors = ['#ff6b63', '#ffd452', '#64f0ff', '#8ae68c', '#ff9eb5', '#ff9f43'];
+        fxRings.push({ x: originX, y: originY, r: 14, maxR: 136, color: '#64f0ff', life: 1 });
+        for (let i = 0; i < 88; i++) {
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.9;
+          const speed = 5.5 + Math.random() * 11;
+          fxParticles.push({
+            type: i % 3 === 0 ? 'star' : 'ribbon',
+            x: originX,
+            y: originY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 2.6,
+            size: 6 + Math.random() * 7,
+            color: colors[i % colors.length],
+            rot: Math.random() * 360,
+            vRot: (Math.random() - 0.5) * 14,
+            gravity: 0.22,
+            life: 1,
+            decay: 0.009 + Math.random() * 0.005
+          });
+        }
+        if (!fxRaf) animateFX();
+      }
+
+      function animateFX() {
+        confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+
+        fxRings = fxRings.filter(ring => ring.life > 0.03);
+        fxRings.forEach(ring => {
+          ring.r += (ring.maxR - ring.r) * 0.14;
+          ring.life -= 0.035;
+          confettiCtx.save();
+          confettiCtx.globalAlpha = Math.max(0, ring.life);
+          confettiCtx.strokeStyle = ring.color;
+          confettiCtx.lineWidth = 3.4;
+          confettiCtx.beginPath();
+          confettiCtx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+          confettiCtx.stroke();
+          confettiCtx.restore();
+        });
+
+        fxParticles = fxParticles.filter(p => p.life > 0.02);
+        fxParticles.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += p.gravity;
+          p.vx *= 0.985;
+          p.rot += p.vRot;
+          p.life -= p.decay;
+          confettiCtx.save();
+          confettiCtx.globalAlpha = Math.max(0, p.life);
+          confettiCtx.translate(p.x, p.y);
+          confettiCtx.rotate((p.rot * Math.PI) / 180);
+          confettiCtx.fillStyle = p.color;
+          if (p.type === 'star') {
+            drawStar(confettiCtx, p.size);
+          } else if (p.type === 'drop') {
+            confettiCtx.beginPath();
+            confettiCtx.arc(0, 0, p.size * 0.45, 0, Math.PI * 2);
+            confettiCtx.fill();
+          } else {
+            confettiCtx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.65);
+          }
+          confettiCtx.restore();
+        });
+
+        if (fxParticles.length > 0 || fxRings.length > 0) {
+          fxRaf = requestAnimationFrame(animateFX);
+        } else {
+          fxRaf = null;
+        }
+      }
+
+      /* ==================== GROUP SCORING LOGIC ==================== */
+      function addGroupScore(idx, btnEl) {
+        if (celebratingGroups[idx]) return;
+        const g = state.groups[idx];
+        if (!g || g.score >= 10) return;
+        g.score += 1;
+        saveState();
+        renderGroups();
+        playPopSound(520 + g.score * 38);
+
+        const rect = btnEl ? btnEl.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight * 0.75, width: 0 };
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top - 42;
+
+        if (g.score >= 10) {
+          celebratingGroups[idx] = true;
+          renderGroups();
+          playCheerSound();
+          launchConfettiAt(cx, cy);
+          showToast(`🎉 恭喜「${g.name}」滿 10 分！3 秒後自動展開新一輪！`);
+
+          setTimeout(() => {
+            state.groups[idx].score = 0;
+            delete celebratingGroups[idx];
+            saveState();
+            renderGroups();
+          }, 3000);
+        } else {
+          launchSparkleBurst(cx, cy, ['#ffca52', '#64f0ff', '#ff9eb5', '#ffffff']);
+        }
+      }
+
+      function subGroupScore(idx) {
+        if (celebratingGroups[idx]) return;
+        const g = state.groups[idx];
+        if (!g || g.score <= 0) return;
+        g.score -= 1;
+        saveState();
+        renderGroups();
+        playPopSound(360);
+      }
+
+      /* ==================== SETTINGS MODAL RENDER & HANDLERS ==================== */
+      function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('open');
+      }
+
+      function closeModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('open');
+      }
+
+      function renderTaskEditor() {
+        document.querySelectorAll('.task-mode-switch').forEach(btn => {
+          const active = btn.dataset.editMode === editingTaskMode;
+          btn.classList.toggle('neutral', !active);
+        });
+        const container = document.getElementById('task-editor-list');
+        const list = state.tasks[editingTaskMode] || [];
+        container.innerHTML = list.map((item, idx) => `
+          <div class="task-edit-row">
+            <input type="text" class="felt-input task-edit-input" data-edit-idx="${idx}" value="${escapeHtml(item.text)}" />
+            <button type="button" class="btn-3d small-action-btn danger task-delete-btn" data-del-idx="${idx}">刪除</button>
+          </div>
+        `).join('');
+      }
+
+      function renderClassEditor() {
+        const range = document.getElementById('student-count-range');
+        const val = document.getElementById('student-count-val');
+        range.value = state.studentCount;
+        val.textContent = `${state.studentCount} 人`;
+
+        const grid = document.getElementById('group-name-inputs');
+        grid.innerHTML = state.groups.map((g, idx) => `
+          <div>
+            <label class="form-label" style="margin-bottom:4px;" for="gname-${idx}">組別 ${idx + 1}</label>
+            <input id="gname-${idx}" type="text" class="felt-input group-name-edit" data-gidx="${idx}" value="${escapeHtml(g.name)}" maxlength="12" />
+          </div>
+        `).join('');
+      }
+
+      function renderQuietEditor() {
+        document.getElementById('noise-threshold-range').value = state.noiseThreshold;
+        document.getElementById('noise-threshold-val').textContent = String(state.noiseThreshold);
+        document.getElementById('sim-volume-range').value = simVolume;
+        document.getElementById('sim-volume-val').textContent = String(simVolume);
+      }
+
+      function renderImageEditor() {
+        const slots = [
+          { key: 'quietSleep', label: '安靜挑戰：睡覺企鵝' },
+          { key: 'quietAwake', label: '安靜挑戰：驚醒企鵝' },
+          { key: 'group0', label: `${state.groups[0].name} 企鵝` },
+          { key: 'group1', label: `${state.groups[1].name} 企鵝` },
+          { key: 'group2', label: `${state.groups[2].name} 企鵝` },
+          { key: 'group3', label: `${state.groups[3].name} 企鵝` },
+          { key: 'group4', label: `${state.groups[4].name} 企鵝` },
+          { key: 'group5', label: `${state.groups[5].name} 企鵝` }
+        ];
+        const grid = document.getElementById('custom-image-grid');
+        grid.innerHTML = slots.map(slot => {
+          const dataUrl = state.customImages[slot.key];
+          return `
+            <div class="upload-card">
+              <div class="upload-preview">
+                ${dataUrl ? `<img src="${dataUrl}" alt="${escapeHtml(slot.label)}" />` : '🐧'}
+              </div>
+              <div class="upload-info">
+                <div class="upload-title">${escapeHtml(slot.label)}</div>
+                <div class="upload-actions">
+                  <label class="btn-3d small-action-btn" style="padding:4px 10px; font-size:12px; cursor:pointer;">
+                    上傳圖片
+                    <input type="file" accept="image/*" data-img-key="${slot.key}" style="display:none;" />
+                  </label>
+                  ${dataUrl ? `<button type="button" class="btn-3d small-action-btn neutral" style="padding:4px 8px; font-size:12px;" data-clear-img="${slot.key}">還原</button>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function compressImageFile(file, callback) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            const maxDim = 260;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+              const scale = maxDim / Math.max(w, h);
+              w = Math.round(w * scale);
+              h = Math.round(h * scale);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            callback(canvas.toDataURL('image/png', 0.85));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      /* ==================== EVENT LISTENERS ==================== */
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.mode = btn.dataset.mode;
+          saveState();
+          renderModes();
+          renderTasks();
+          playPopSound(600);
+        });
+      });
+
+      const taskListEl = document.getElementById('task-list');
+      function handleTaskToggle(li) {
+        const id = li.dataset.taskId;
+        const list = state.tasks[state.mode];
+        const target = list.find(t => t.id === id);
+        if (!target) return;
+        target.done = !target.done;
+        if (target.done) {
+          const rect = li.getBoundingClientRect();
+          launchSparkleBurst(rect.left + 26, rect.top + rect.height / 2, ['#ffca52', '#64f0ff', '#ffffff']);
+        }
+        saveState();
+        renderTasks();
+        playPopSound(target.done ? 680 : 420);
+      }
+      taskListEl.addEventListener('click', e => {
+        const li = e.target.closest('.task-item');
+        if (li) handleTaskToggle(li);
+      });
+      taskListEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          const li = e.target.closest('.task-item');
+          if (li) {
+            e.preventDefault();
+            handleTaskToggle(li);
+          }
+        }
+      });
+
+      document.getElementById('quiet-toggle-btn').addEventListener('click', () => {
+        if (micActive) stopMicMonitor();
+        else startMicMonitor();
+      });
+
+      document.getElementById('student-grid').addEventListener('click', e => {
+        const btn = e.target.closest('.student-tile');
+        if (!btn) return;
+        const num = Number(btn.dataset.student);
+        const idx = state.markedStudents.indexOf(num);
+        if (idx >= 0) {
+          state.markedStudents.splice(idx, 1);
+          playPopSound(440);
+        } else {
+          state.markedStudents.push(num);
+          playPopSound(340);
+        }
+        saveState();
+        renderStudents();
+      });
+
+      document.getElementById('clear-marks-btn').addEventListener('click', () => {
+        state.markedStudents = [];
+        saveState();
+        renderStudents();
+        playPopSound(660);
+        showToast('已清除所有摘名標記');
+      });
+
+      document.getElementById('groups-row').addEventListener('click', e => {
+        const addBtn = e.target.closest('[data-add-group]');
+        if (addBtn) {
+          addGroupScore(Number(addBtn.dataset.addGroup), addBtn);
+          return;
+        }
+        const subBtn = e.target.closest('[data-sub-group]');
+        if (subBtn) {
+          subGroupScore(Number(subBtn.dataset.subGroup));
+        }
+      });
+
+      document.getElementById('clock-btn').addEventListener('click', () => {
+        if (timerFinished) {
+          resetCountdownToClock();
+          return;
+        }
+        openModal('timer-modal');
+      });
+
+      document.querySelectorAll('.timer-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const mins = Number(btn.dataset.timerMin);
+          document.getElementById('timer-custom-input').value = mins;
+          startCountdown(mins);
+          closeModal('timer-modal');
+          showToast(`⏱️ 已啟動 ${mins} 分鐘倒數`);
+        });
+      });
+
+      document.getElementById('timer-start-btn').addEventListener('click', () => {
+        const mins = Number(document.getElementById('timer-custom-input').value);
+        if (timerMode && !timerRunning && timerRemainingSec > 0 && !timerFinished) {
+          timerRunning = true;
+          updateClockUI();
+          closeModal('timer-modal');
+          return;
+        }
+        startCountdown(mins);
+        closeModal('timer-modal');
+        showToast(`⏱️ 已啟動 ${Math.max(1, Math.min(120, mins || 1))} 分鐘倒數`);
+      });
+
+      document.getElementById('timer-pause-btn').addEventListener('click', () => {
+        if (timerMode && !timerFinished) {
+          timerRunning = !timerRunning;
+          updateClockUI();
+          showToast(timerRunning ? '已繼續倒數' : '已暫停倒數');
+        }
+      });
+
+      document.getElementById('timer-reset-btn').addEventListener('click', () => {
+        resetCountdownToClock();
+        closeModal('timer-modal');
+        showToast('已返回系統時鐘');
+      });
+
+      document.getElementById('settings-btn').addEventListener('click', () => {
+        editingTaskMode = state.mode;
+        confirmResetScores = false;
+        confirmResetAll = false;
+        document.getElementById('reset-scores-btn').textContent = '重設所有分數';
+        document.getElementById('reset-all-btn').textContent = '恢復預設設定';
+        renderTaskEditor();
+        renderClassEditor();
+        renderQuietEditor();
+        populateMicDevices();
+        renderImageEditor();
+        openModal('settings-modal');
+      });
+
+      document.querySelectorAll('.modal-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.stab;
+          document.querySelectorAll('.modal-tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+          document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'stab-' + target));
+        });
+      });
+
+      document.querySelectorAll('[data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', () => closeModal(btn.dataset.closeModal));
+      });
+      document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.addEventListener('click', e => {
+          if (e.target === backdrop) closeModal(backdrop.id);
+        });
+      });
+
+      document.querySelectorAll('.task-mode-switch').forEach(btn => {
+        btn.addEventListener('click', () => {
+          editingTaskMode = btn.dataset.editMode;
+          renderTaskEditor();
+        });
+      });
+
+      document.getElementById('task-editor-list').addEventListener('input', e => {
+        if (e.target.classList.contains('task-edit-input')) {
+          const idx = Number(e.target.dataset.editIdx);
+          if (state.tasks[editingTaskMode][idx]) {
+            state.tasks[editingTaskMode][idx].text = e.target.value;
+            saveState();
+            if (editingTaskMode === state.mode) renderTasks();
+          }
+        }
+      });
+
+      document.getElementById('task-editor-list').addEventListener('click', e => {
+        const delBtn = e.target.closest('.task-delete-btn');
+        if (!delBtn) return;
+        const idx = Number(delBtn.dataset.delIdx);
+        state.tasks[editingTaskMode].splice(idx, 1);
+        saveState();
+        renderTaskEditor();
+        if (editingTaskMode === state.mode) renderTasks();
+      });
+
+      document.getElementById('add-task-btn').addEventListener('click', () => {
+        const input = document.getElementById('new-task-input');
+        const text = input.value.trim();
+        if (!text) return;
+        state.tasks[editingTaskMode].push({
+          id: 't_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+          text,
+          done: false
+        });
+        input.value = '';
+        saveState();
+        renderTaskEditor();
+        if (editingTaskMode === state.mode) renderTasks();
+      });
+
+      document.getElementById('student-count-range').addEventListener('input', e => {
+        state.studentCount = Number(e.target.value);
+        document.getElementById('student-count-val').textContent = `${state.studentCount} 人`;
+        state.markedStudents = state.markedStudents.filter(n => n <= state.studentCount);
+        saveState();
+        renderStudents();
+      });
+
+      document.getElementById('group-name-inputs').addEventListener('input', e => {
+        if (!e.target.classList.contains('group-name-edit')) return;
+        const idx = Number(e.target.dataset.gidx);
+        state.groups[idx].name = e.target.value.trim() || DEFAULT_STATE.groups[idx].name;
+        saveState();
+        renderGroups();
+      });
+
+      document.getElementById('mic-device-select').addEventListener('change', e => {
+        selectedMicId = e.target.value;
+        if (micActive) {
+          stopMicMonitor();
+          startMicMonitor();
+        }
+      });
+
+      document.getElementById('noise-threshold-range').addEventListener('input', e => {
+        state.noiseThreshold = Number(e.target.value);
+        document.getElementById('noise-threshold-val').textContent = String(state.noiseThreshold);
+        saveState();
+      });
+
+      document.getElementById('sim-volume-range').addEventListener('input', e => {
+        simVolume = Number(e.target.value);
+        document.getElementById('sim-volume-val').textContent = String(simVolume);
+        updateDbBars(simVolume);
+        setQuietState(simVolume >= state.noiseThreshold, simVolume);
+      });
+
+      document.getElementById('custom-image-grid').addEventListener('change', e => {
+        const input = e.target;
+        if (input.type !== 'file' || !input.files || !input.files[0]) return;
+        const key = input.dataset.imgKey;
+        compressImageFile(input.files[0], dataUrl => {
+          state.customImages[key] = dataUrl;
+          saveState();
+          renderImageEditor();
+          renderQuietPenguin(penguinAwake);
+          renderGroups();
+          showToast('已更新自訂企鵝圖片');
+        });
+      });
+
+      document.getElementById('custom-image-grid').addEventListener('click', e => {
+        const clearBtn = e.target.closest('[data-clear-img]');
+        if (!clearBtn) return;
+        const key = clearBtn.dataset.clearImg;
+        state.customImages[key] = '';
+        saveState();
+        renderImageEditor();
+        renderQuietPenguin(penguinAwake);
+        renderGroups();
+        showToast('已還原預設企鵝外觀');
+      });
+
+      document.getElementById('reset-scores-btn').addEventListener('click', e => {
+        const btn = e.currentTarget;
+        if (!confirmResetScores) {
+          confirmResetScores = true;
+          btn.textContent = '再按一次確認重設分數';
+          setTimeout(() => {
+            confirmResetScores = false;
+            btn.textContent = '重設所有分數';
+          }, 4000);
+          return;
+        }
+        confirmResetScores = false;
+        btn.textContent = '重設所有分數';
+        state.groups.forEach(g => { g.score = 0; });
+        state.markedStudents = [];
+        celebratingGroups = {};
+        saveState();
+        renderGroups();
+        renderStudents();
+        showToast('已重設所有組別分數及摘名標記');
+      });
+
+      document.getElementById('reset-all-btn').addEventListener('click', e => {
+        const btn = e.currentTarget;
+        if (!confirmResetAll) {
+          confirmResetAll = true;
+          btn.textContent = '再按一次確認恢復預設';
+          setTimeout(() => {
+            confirmResetAll = false;
+            btn.textContent = '恢復預設設定';
+          }, 4000);
+          return;
+        }
+        confirmResetAll = false;
+        btn.textContent = '恢復預設設定';
+        state = deepClone(DEFAULT_STATE);
+        simVolume = 0;
+        celebratingGroups = {};
+        saveState();
+        renderModes();
+        renderTasks();
+        renderStudents();
+        renderGroups();
+        renderQuietPenguin(false);
+        renderTaskEditor();
+        renderClassEditor();
+        renderQuietEditor();
+        renderImageEditor();
+        showToast('已恢復全部預設設定');
+      });
+
+      /* ==================== INITIALIZE ==================== */
+      buildDbBars();
+      renderModes();
+      renderTasks();
+      renderStudents();
+      renderGroups();
+      renderQuietPenguin(false);
+      updateClockUI();
+    })();
+  </script>
+</body>
+</html>
